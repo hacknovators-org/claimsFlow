@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Decimal, Date, DateTime
+from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime
 from .base import Base
 from datetime import datetime
 
@@ -14,8 +14,8 @@ class TreatyContract(Base):
     period_from = Column(Date, nullable=False)
     period_to = Column(Date, nullable=False)
     currency = Column(String(10))  # KES, TZS, UGX, USD
-    commission_rate = Column(Decimal(5, 4))  # e.g., 0.2750 for 27.5%
-    profit_commission_rate = Column(Decimal(5, 4))  # e.g., 0.4250 for 42.5%
+    commission_rate = Column(Numeric(5, 4))  # e.g., 0.2750 for 27.5%
+    profit_commission_rate = Column(Numeric(5, 4))  # e.g., 0.4250 for 42.5%
     
     
     created_at = Column(DateTime, default=datetime.utcnow)

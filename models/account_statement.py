@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Decimal, Date, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Date, DateTime
 from .base import Base
 from datetime import datetime
 from sqlalchemy.orm import relationship
@@ -20,24 +20,24 @@ class AccountStatement(Base):
     statement_date = Column(Date)
     
     # Premium income
-    cargo_premium = Column(Decimal(15, 2), default=0)
-    hull_premium = Column(Decimal(15, 2), default=0)
-    ri_premium = Column(Decimal(15, 2), default=0)
-    total_income = Column(Decimal(15, 2))
+    cargo_premium = Column(Numeric(15, 2), default=0)
+    hull_premium = Column(Numeric(15, 2), default=0)
+    ri_premium = Column(Numeric(15, 2), default=0)
+    total_income = Column(Numeric(15, 2))
     
     # Commissions and taxes
-    commission_rate = Column(Decimal(5, 4))
-    commission_amount = Column(Decimal(15, 2))
-    premium_tax_rate = Column(Decimal(5, 4))
-    premium_tax_amount = Column(Decimal(15, 2))
+    commission_rate = Column(Numeric(5, 4))
+    commission_amount = Column(Numeric(15, 2))
+    premium_tax_rate = Column(Numeric(5, 4))
+    premium_tax_amount = Column(Numeric(15, 2))
     
     # Claims
-    claims_paid = Column(Decimal(15, 2), default=0)
-    outstanding_claims = Column(Decimal(15, 2), default=0)
+    claims_paid = Column(Numeric(15, 2), default=0)
+    outstanding_claims = Column(Numeric(15, 2), default=0)
     
     # Totals
-    total_outgo = Column(Decimal(15, 2))
-    balance = Column(Decimal(15, 2))
+    total_outgo = Column(Numeric(15, 2))
+    balance = Column(Numeric(15, 2))
     
     # Status
     prepared_by = Column(String(100))

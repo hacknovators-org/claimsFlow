@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Decimal, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from .base import Base
 
@@ -11,8 +11,8 @@ class ReinsurerShare(Base):
     reinsurer_name = Column(String(255), nullable=False)
     broker_name = Column(String(255))
     
-    share_amount = Column(Decimal(15, 2))
-    share_percentage = Column(Decimal(5, 4))
+    share_amount = Column(Numeric(15, 2))
+    share_percentage = Column(Numeric(5, 4))
     is_statutory = Column(Boolean, default=False)
     
     statement = relationship("AccountStatement", backref="reinsurer_shares")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Decimal, Date, DateTime, Text
+from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Date, DateTime, Text
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
@@ -33,8 +33,8 @@ class CashCall(Base):
     claim_fgu = Column(Integer, default=0)
     
     # Financial amounts
-    amount_original = Column(Decimal(15, 2)) 
-    functional_amount = Column(Decimal(15, 2))  # Converted to functional currency
+    amount_original = Column(Numeric(15, 2)) 
+    functional_amount = Column(Numeric(15, 2))  # Converted to functional currency
     
     # Status and processing
     settlement_indicator = Column(String(20))

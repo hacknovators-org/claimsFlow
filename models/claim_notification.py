@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Decimal, Date, DateTime
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Numeric, Date, DateTime
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
@@ -20,11 +20,11 @@ class ClaimNotification(Base):
     policy_period_to = Column(Date)
     
     # Amounts
-    sum_insured = Column(Decimal(15, 2))
-    gross_claim_amount = Column(Decimal(15, 2))
-    ga_retention = Column(Decimal(15, 2))
-    surplus_amount = Column(Decimal(15, 2))
-    facultative_amount = Column(Decimal(15, 2))
+    sum_insured = Column(Numeric(15, 2))
+    gross_claim_amount = Column(Numeric(15, 2))
+    ga_retention = Column(Numeric(15, 2))
+    surplus_amount = Column(Numeric(15, 2))
+    facultative_amount = Column(Numeric(15, 2))
     
     # Classification
     underwriting_year = Column(Integer)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Decimal
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Numeric
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
@@ -28,8 +28,8 @@ class ProcessingBatch(Base):
     validation_errors_count = Column(Integer, default=0)
     validation_warnings_count = Column(Integer, default=0)
     
-    total_claims_amount = Column(Decimal(15, 2))
-    total_premiums_amount = Column(Decimal(15, 2))
+    total_claims_amount = Column(Numeric(15, 2))
+    total_premiums_amount = Column(Numeric(15, 2))
     claims_count = Column(Integer, default=0)
     premiums_count = Column(Integer, default=0)
     

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Decimal, Date, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Date, DateTime
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
@@ -27,16 +27,16 @@ class PremiumBordereaux(Base):
     account_date = Column(Date)
     
     # Amounts
-    sum_insured = Column(Decimal(15, 2))
-    gross_premium = Column(Decimal(15, 2))
-    ri_premium = Column(Decimal(15, 2))
-    retention_premium = Column(Decimal(15, 2))
-    facultative_si = Column(Decimal(15, 2))
-    facultative_premium = Column(Decimal(15, 2))
+    sum_insured = Column(Numeric(15, 2))
+    gross_premium = Column(Numeric(15, 2))
+    ri_premium = Column(Numeric(15, 2))
+    retention_premium = Column(Numeric(15, 2))
+    facultative_si = Column(Numeric(15, 2))
+    facultative_premium = Column(Numeric(15, 2))
     
     # Percentages
-    facultative_percentage = Column(Decimal(5, 4))
-    retention_percentage = Column(Decimal(5, 4))
+    facultative_percentage = Column(Numeric(5, 4))
+    retention_percentage = Column(Numeric(5, 4))
     
     created_at = Column(DateTime, default=datetime.utcnow)
 

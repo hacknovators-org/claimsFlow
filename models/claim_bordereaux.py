@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Decimal, Date, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
@@ -17,8 +17,8 @@ class ClaimBordereaux(Base):
     transaction_type = Column(String(20))  # S = Settlement, C = Case, etc.
     
     # Amounts
-    paid_amount = Column(Decimal(15, 2))
-    outstanding_amount = Column(Decimal(15, 2))
+    paid_amount = Column(Numeric(15, 2))
+    outstanding_amount = Column(Numeric(15, 2))
     
     # References
     approval_date = Column(Date)
