@@ -9,6 +9,8 @@ class ClaimBordereaux(Base):
     
     id = Column(Integer, primary_key=True)
     notification_id = Column(Integer, ForeignKey('claim_notifications.id'))
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
+
     
     # Transaction details
     transaction_date = Column(Date)
@@ -25,3 +27,5 @@ class ClaimBordereaux(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     claim = relationship("ClaimNotification", backref="bordereaux_entries")
+
+    batch = relationship("ProcessingBatch", backref="claim_bordereaux")

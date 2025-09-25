@@ -9,6 +9,9 @@ class ValidationError(Base):
     
     id = Column(Integer, primary_key=True)
     document_id = Column(Integer, ForeignKey('document_uploads.id'))
+
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
+
     
     error_type = Column(String(100))  # "date_validation", "amount_mismatch", "cash_call_validation", etc.
     error_message = Column(Text)
@@ -22,3 +25,5 @@ class ValidationError(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     document = relationship("DocumentUpload", backref="validation_errors")
+
+    batch = relationship("ProcessingBatch", backref="validation_errors")

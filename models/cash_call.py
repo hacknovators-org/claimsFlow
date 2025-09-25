@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Decimal, Date, DateTime, Text
+from sqlalchemy import Column, ForeignKey, Integer, String, Decimal, Date, DateTime, Text
+from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
 
@@ -7,6 +8,9 @@ class CashCall(Base):
     __tablename__ = 'cash_calls'
     
     id = Column(Integer, primary_key=True)
+
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
+
     
     # Core identifiers
     claim_id = Column(String(20), nullable=False, index=True)  # e.g., "0000054954"
@@ -29,18 +33,21 @@ class CashCall(Base):
     claim_fgu = Column(Integer, default=0)
     
     # Financial amounts
-    amount_original = Column(Decimal(15, 2))  # Original amount in claim currency
+    amount_original = Column(Decimal(15, 2)) 
     functional_amount = Column(Decimal(15, 2))  # Converted to functional currency
     
     # Status and processing
-    settlement_indicator = Column(String(20))  # "Settled", "Unsettled"
-    ws_registered_by_id = Column(String(50))  # User who registered
+    settlement_indicator = Column(String(20))
+    ws_registered_by_id = Column(String(50))
     date_of_booking = Column(Date)
     worksheet_notes = Column(Text)
     
     # Audit fields
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    batch = relationship("ProcessingBatch", backref="cash_calls")
+
     
     # Helper properties
     @property

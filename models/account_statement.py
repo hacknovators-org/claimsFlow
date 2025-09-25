@@ -1,12 +1,17 @@
-from sqlalchemy import Column, Integer, String, Decimal, Date, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Decimal, Date, DateTime
 from .base import Base
 from datetime import datetime
+from sqlalchemy.orm import relationship
+
 
 class AccountStatement(Base):
     """Quarterly account statements"""
     __tablename__ = 'account_statements'
     
     id = Column(Integer, primary_key=True)
+
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
+
     
     # Statement details
     currency = Column(String(10), nullable=False)
@@ -39,3 +44,5 @@ class AccountStatement(Base):
     confirmed_by = Column(String(100))
     
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    batch = relationship("ProcessingBatch", backref="account_statements")

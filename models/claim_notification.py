@@ -10,6 +10,7 @@ class ClaimNotification(Base):
     id = Column(Integer, primary_key=True)
     claim_number = Column(String(50), unique=True, nullable=False)
     policy_number = Column(String(50), nullable=False)
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
     insured_name = Column(String(255), nullable=False)
     
     # Dates
@@ -37,3 +38,4 @@ class ClaimNotification(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    batch = relationship("ProcessingBatch", backref="claim_notifications")

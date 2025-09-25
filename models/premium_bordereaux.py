@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Decimal, Date, DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, Decimal, Date, DateTime
+from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
 
@@ -7,6 +8,8 @@ class PremiumBordereaux(Base):
     __tablename__ = 'premium_bordereaux'
     
     id = Column(Integer, primary_key=True)
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
+
     
     # Policy details
     policy_number = Column(String(50), nullable=False)
@@ -36,3 +39,5 @@ class PremiumBordereaux(Base):
     retention_percentage = Column(Decimal(5, 4))
     
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    batch = relationship("ProcessingBatch", backref="premium_bordereaux")

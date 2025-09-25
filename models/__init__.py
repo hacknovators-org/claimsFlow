@@ -1,4 +1,5 @@
 from .base import Base
+from .processing_batch import ProcessingBatch
 from .treaty_contract import TreatyContract
 from .reinsurer import Reinsurer
 from .claim_notification import ClaimNotification
@@ -23,6 +24,7 @@ def create_database_engine(database_url: str):
 
 __all__ = [
     'Base',
+    'ProcessingBatch',
     'TreatyContract',
     'Reinsurer', 
     'ClaimNotification',

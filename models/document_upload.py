@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
 
@@ -7,6 +8,7 @@ class DocumentUpload(Base):
     __tablename__ = 'document_uploads'
     
     id = Column(Integer, primary_key=True)
+    batch_id = Column(Integer, ForeignKey('processing_batches.id'), nullable=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(500))
     file_type = Column(String(50))  # "treaty", "bordereaux", "statement", "cash_calls"
@@ -23,3 +25,4 @@ class DocumentUpload(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    batch = relationship("ProcessingBatch", backref="document_uploads")
