@@ -1,10 +1,11 @@
 import imaplib
 import email
-from email.message import Message   # ✅ Fix: import Message explicitly
+from email.message import Message
 import logging
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from email_analyzer import SimpleEmailAnalyzer
+from langchain.tools import tool
 
 
 @dataclass
@@ -28,6 +29,7 @@ class FocusedGmailConnector:
         self.imap_server = None
         self.is_connected = False
         
+    @tool    
     def connect(self) -> bool:
         """Connect to Gmail IMAP server"""
         try:

@@ -2,6 +2,8 @@ from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, Foreign
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
+from langchain.agents import create_sql_agent
+
 
 class ClaimBordereaux(Base):
     """Claims bordereaux entries"""
