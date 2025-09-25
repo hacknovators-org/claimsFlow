@@ -80,11 +80,14 @@ class DocumentProcessingService:
             email_received_date=email_date,
             status="received"
         )
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        batch.batch_reference = f"BATCH_{timestamp}_NEW"
         
         self.db.add(batch)
         self.db.flush()
         
-        batch.batch_reference = batch.generate_batch_reference()
+        batch.batch_reference = f"BATCH_{timestamp}_{batch.id}"
+
         
         return batch
     
