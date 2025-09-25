@@ -8,7 +8,7 @@ def render_header():
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        st.markdown("📧 **Source Email:** Maundu@kenyare.co.ke")
+        st.markdown("📧 **Source Email:** wamitinewton@gmail.com")
     
     with col2:
         current_time = datetime.now().strftime("%H:%M:%S")

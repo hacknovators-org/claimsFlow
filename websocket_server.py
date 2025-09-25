@@ -17,7 +17,7 @@ async def handle_client_message(websocket: WebSocketServerProtocol, message: Dic
         message_type = message.get("type")
         
         if message_type == "start_processing":
-            sender_email = message.get("sender_email", "Maundu@kenyare.co.ke")
+            sender_email = message.get("sender_email", "wamitinewton@gmail.com")
             
             await websocket_manager.send_to_client(websocket, {
                 "type": "processing_started",

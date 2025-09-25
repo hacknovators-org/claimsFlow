@@ -6,13 +6,16 @@ from datetime import datetime
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the root directory to Python path
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 from ui.components.header import render_header
 from ui.components.status_display import render_status_display
 from ui.components.progress_tracker import render_progress_tracker
 from ui.components.report_viewer import render_report_viewer
-from ui.services.websocket_client import WebSocketClient
+from ui.servicesui.websocket_client import WebSocketClient
 from ui.utils.session_state import initialize_session_state
 
 st.set_page_config(
