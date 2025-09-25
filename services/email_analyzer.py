@@ -5,37 +5,26 @@ from dataclasses import dataclass
 from enum import Enum
 from openai import OpenAI
 import os
-from dotenv import load_dotenv
-load_dotenv('../.env')
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable not set")
 
 class DocumentType(Enum):
-    """Insurance document types"""
     CLAIMS_NOTIFICATION = "Claims Notification Document"
     CLAIMS_BORDEREAUX = "Claims Bordereaux" 
     CEDANT_STATEMENT = "Cedant/Insurer Statement"
     TREATY_SLIP = "Treaty Slip/Contract"
     SICS_TREATY_SLIP = "SICS Treaty Slip"
 
-
-# Define the mandatory docs
 MANDATORY_DOCS = [
     DocumentType.CLAIMS_NOTIFICATION.value,
     DocumentType.CLAIMS_BORDEREAUX.value,
     DocumentType.CEDANT_STATEMENT.value,
 ]
 
-
 @dataclass
 class DocumentFound:
     filename: str
     document_type: DocumentType
-    confidence: str  # High, Medium, Low
+    confidence: str
     key_identifiers: List[str]
-
 
 @dataclass
 class AnalysisReport:
@@ -44,19 +33,21 @@ class AnalysisReport:
     documents_found: List[DocumentFound]
     all_documents_present: bool
     missing_documents: List[str]
-    completion_status: str  # "Complete", "Incomplete", "Error"
+    completion_status: str
     summary: str
 
-
 class SimpleEmailAnalyzer:
-    """Analyzes email content to determine document completeness"""
-
-    def __init__(self, api_key: str):
+    
+    def __init__(self, api_key: str = None):
+        if not api_key:
+            api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not provided and not found in environment variables")
+            
         self.client = OpenAI(api_key=api_key)
 
     def create_analysis_prompt(self, email_subject: str, email_body: str, attachments: List[str]) -> str:
-        """Create the prompt for AI analysis"""
-
         prompt = f"""
 You are an insurance document expert. Analyze this email to determine which required documents are present and which are missing.
 
@@ -110,10 +101,9 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
         return prompt
 
     def call_openai_api(self, prompt: str) -> Dict:
-        """Call OpenAI API for analysis (new SDK style)"""
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # lightweight GPT-4o, change if you want gpt-4.1
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an expert insurance document analyst. Always respond with valid JSON in the exact format requested."},
                     {"role": "user", "content": prompt}
@@ -124,7 +114,6 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
 
             content = response.choices[0].message.content.strip()
 
-            # Clean up response if wrapped in ```json
             if content.startswith("```json"):
                 content = content[7:]
             if content.endswith("```"):
@@ -137,7 +126,6 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
             return {"error": str(e)}
 
     def analyze_email_content(self, email_subject: str, email_body: str, attachments: List[str]) -> AnalysisReport:
-        """Analyze email content and generate report"""
         try:
             prompt = self.create_analysis_prompt(email_subject, email_body, attachments)
             response = self.call_openai_api(prompt)
@@ -155,7 +143,6 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
 
             analysis_data = response.get("analysis", {})
 
-            # Convert documents found
             documents_found = []
             for doc_data in analysis_data.get("documents_found", []):
                 try:
@@ -193,7 +180,6 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
             )
 
     def generate_report(self, analysis: AnalysisReport) -> str:
-        """Generate a human-readable report"""
         lines = []
         lines.append("=" * 60)
         lines.append("CLAIMS EMAIL ANALYSIS REPORT")
@@ -233,40 +219,3 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
         lines.append("=" * 60)
 
         return "\n".join(lines)
-
-
-# Example usage
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-
-    analyzer = SimpleEmailAnalyzer(api_key=OPENAI_API_KEY)
-
-    sample_subject = "Q1 Claims Package - Policy ABC123"
-    sample_body = """
-    Dear Team,
-
-    Please find attached the quarterly claims package for Policy ABC123:
-
-    1. Claim notification for incident CLM-2024-001
-    2. Monthly bordereaux with all paid claims
-    3. Cedant statement for Q1 2024
-    4. Updated treaty slip with amendments
-
-    All documents reviewed and ready for processing.
-
-    Best regards,
-    Claims Department
-    """
-
-    sample_attachments = [
-        "claim_notification_ABC123.pdf",
-        "bordereaux_march_2024.xlsx",
-        "cedant_statement_q1.pdf",
-        "treaty_slip_updated.docx"
-    ]
-
-    print("Analyzing email content...")
-    analysis = analyzer.analyze_email_content(sample_subject, sample_body, sample_attachments)
-
-    report = analyzer.generate_report(analysis)
-    print(report)
