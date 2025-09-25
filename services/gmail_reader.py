@@ -1,10 +1,11 @@
 import imaplib
 import email
-from email.message import Message
+from email.message import Message   
 import logging
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-from email_analyzer import SimpleEmailAnalyzer
+from services.email_analyzer import SimpleEmailAnalyzer
+import os
 from langchain.tools import tool
 
 
@@ -29,7 +30,6 @@ class FocusedGmailConnector:
         self.imap_server = None
         self.is_connected = False
         
-    @tool    
     def connect(self) -> bool:
         """Connect to Gmail IMAP server"""
         try:
@@ -173,6 +173,41 @@ class FocusedGmailConnector:
             if content:
                 results.append(content)
         return results
+    
+    def download_attachments(self, email_content: EmailContent, download_folder: str = "downloads") -> List[str]:
+        """
+        Download attachments from an email and save them locally.
+        Returns a list of saved file paths.
+        """
+        if not self.is_connected:
+            logging.error("Not connected to Gmail")
+            return []
+
+        os.makedirs(download_folder, exist_ok=True)
+        saved_files = []
+
+        try:
+            status, msg_data = self.imap_server.fetch(email_content.uid.encode(), '(RFC822)')
+            if status != 'OK' or not msg_data[0]:
+                logging.error(f"Failed to fetch email UID {email_content.uid} for attachments")
+                return []
+
+            msg = email.message_from_bytes(msg_data[0][1])
+
+            for part in msg.walk():
+                if part.get_content_disposition() == 'attachment':
+                    filename = part.get_filename()
+                    if filename:
+                        filepath = os.path.join(download_folder, filename)
+                        with open(filepath, "wb") as f:
+                            f.write(part.get_payload(decode=True))
+                        saved_files.append(filepath)
+                        logging.info(f"Saved attachment: {filepath}")
+
+        except Exception as e:
+            logging.error(f"Error downloading attachments: {e}")
+
+        return saved_files
     
     def mark_as_read(self, uid: str):
         if not self.is_connected:
