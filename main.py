@@ -1,102 +1,90 @@
-from contextlib import asynccontextmanager
-from database import init_database, get_db
-from sqlalchemy.orm import Session
-from fastapi import FastAPI, Query, Depends, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any
-from services.email_analyzer import SimpleEmailAnalyzer
-from services.gmail_reader import FocusedGmailConnector
-from services.document_processor import DocumentProcessingService
-from schemas.emails import EmailAnalysisResponse
-from crud.email import analyze_emails_from_sender
-from datetime import datetime
+import asyncio
+import logging
 import os
+from dotenv import load_dotenv
+from websocket_server import start_websocket_server
+from pipeline_controller import ClaimsProcessingPipeline
+from websocket_manager import websocket_manager
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("🚀 Starting application...")
-    init_database()
-    yield
+load_dotenv()
 
-app = FastAPI(
-    title="Reinsurance Processing API",
-    description="API for processing reinsurance documents and data",
-    version="1.0.0",
-    lifespan=lifespan
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-class ProcessingResponse(BaseModel):
-    batch_id: int
-    batch_reference: str
-    status: str
-    processed_files: int
-    total_files: int
-    extracted_records: Dict[str, int]
-    errors: List[str] = []
+logger = logging.getLogger(__name__)
 
-@app.get("/")
-async def root():
-    return {"message": "Reinsurance Processing API is running"}
-
-@app.get("/health")
-async def health_check(db: Session = Depends(get_db)):
-    return {"status": "healthy", "database": "connected"}
-
-@app.get("/check-emails", response_model=List[EmailAnalysisResponse])
-async def check_emails(sender_email: str = Query(..., description="Email address of the sender to check")):
-    return await analyze_emails_from_sender(sender_email)
-
-@app.post("/process-email-documents", response_model=ProcessingResponse)
-async def process_email_documents(
-    sender_email: str = Query(..., description="Email address of the sender"),
-    db: Session = Depends(get_db)
-):
-    """
-    Download attachments from latest email from sender and process all documents
-    """
-    EMAIL_HOST = os.getenv("EMAIL_HOST")
-    EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
+def validate_environment():
+    required_vars = [
+        "OPENAI_API_KEY",
+        "EMAIL_HOST", 
+        "EMAIL_APP_PASSWORD"
+    ]
     
-    if not EMAIL_HOST or not EMAIL_APP_PASSWORD:
-        raise HTTPException(status_code=500, detail="Email configuration missing")
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
     
-    gmail = FocusedGmailConnector(EMAIL_HOST, EMAIL_APP_PASSWORD)
-    processor = DocumentProcessingService(db)
+    if missing_vars:
+        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+    
+    logger.info("Environment validation successful")
+
+async def run_standalone_processing():
+    logger.info("Running standalone claims processing")
+    
+    pipeline = ClaimsProcessingPipeline()
     
     try:
-        with gmail:
-            latest_email = gmail.read_latest_email_from_sender(sender_email)
+        result = await pipeline.start_processing()
+        
+        if result["success"]:
+            logger.info("Claims processing completed successfully")
+            logger.info(f"Recommendation: {result['results']['overall_recommendation']}")
+            logger.info(f"Report generated: {result['results']['report_generated']['pdf_path']}")
             
-            if not latest_email:
-                raise HTTPException(status_code=404, detail=f"No emails found from {sender_email}")
-            
-            file_paths = gmail.download_attachments(latest_email, download_folder="downloads")
-            
-            if not file_paths:
-                raise HTTPException(status_code=404, detail="No attachments found in email")
-            
-            email_date = datetime.strptime(latest_email.date, "%a, %d %b %Y %H:%M:%S %z") if latest_email.date else datetime.utcnow()
-            
-            result = processor.process_email_attachments(
-                file_paths=file_paths,
-                email_subject=latest_email.subject,
-                email_sender=latest_email.sender,
-                email_body=latest_email.body_text,
-                email_date=email_date
-            )
-            
-            return ProcessingResponse(**result)
+            if result['results']['critical_issues']:
+                logger.warning("Critical issues identified:")
+                for issue in result['results']['critical_issues']:
+                    logger.warning(f"- {issue}")
+                    
+        else:
+            logger.error(f"Claims processing failed: {result['error']}")
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Standalone processing error: {e}")
 
-@app.get("/batch-status/{batch_id}")
-async def get_batch_status(batch_id: int, db: Session = Depends(get_db)):
-    """Get processing status for a specific batch"""
-    processor = DocumentProcessingService(db)
-    status = processor.get_batch_status(batch_id)
-    
-    if "error" in status:
-        raise HTTPException(status_code=404, detail=status["error"])
-    
-    return status
+async def run_websocket_server():
+    logger.info("Starting WebSocket server mode")
+    await start_websocket_server(
+        host=os.getenv("WEBSOCKET_HOST", "localhost"),
+        port=int(os.getenv("WEBSOCKET_PORT", 8765))
+    )
+
+async def main():
+    try:
+        validate_environment()
+        
+        mode = os.getenv("RUN_MODE", "standalone").lower()
+        
+        if mode == "websocket":
+            await run_websocket_server()
+        elif mode == "standalone":
+            await run_standalone_processing()
+        else:
+            logger.error(f"Invalid RUN_MODE: {mode}. Use 'standalone' or 'websocket'")
+            
+    except Exception as e:
+        logger.error(f"Application startup failed: {e}")
+        raise
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Application stopped by user")
+    except Exception as e:
+        logger.error(f"Application error: {e}")
+        raise

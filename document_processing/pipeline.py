@@ -1,4 +1,3 @@
-# document_processing/pipeline.py
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from langchain.schema import Document
