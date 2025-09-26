@@ -15,6 +15,8 @@ from services.agent_tools import (
     extract_notification_details, validate_accounting_quarter,
     calculate_recovery_amounts
 )
+import asyncio
+import time
 
 class ClaimsAnalysisAgent(BaseAgent):
     
@@ -30,31 +32,40 @@ class ClaimsAnalysisAgent(BaseAgent):
         try:
             self.status = AgentStatus.PROCESSING
             await self.send_update("initialization", "Initializing claims analysis agent", 5.0)
+            await asyncio.sleep(0.5)
             
             await self._initialize_agent(vector_store_path)
             
             await self.send_update("document_query", "Querying documents for claims data", 15.0)
+            await asyncio.sleep(0.3)
             claims_data = await self._extract_claims_data()
             
-            await self.send_update("fraud_detection", "Running fraud detection analysis", 25.0)
+            await self.send_update("fraud_detection", "Running advanced fraud detection analysis", 25.0)
+            await asyncio.sleep(0.3)
             fraud_analysis = await self._run_fraud_detection(claims_data)
             
-            await self.send_update("exclusion_check", "Checking treaty exclusions", 35.0)
+            await self.send_update("exclusion_check", "Validating claims against treaty exclusions", 35.0)
+            await asyncio.sleep(0.3)
             exclusion_analysis = await self._check_exclusions(claims_data)
             
-            await self.send_update("amount_reconciliation", "Reconciling amounts", 45.0)
+            await self.send_update("amount_reconciliation", "Reconciling amounts between documents", 45.0)
+            await asyncio.sleep(0.3)
             reconciliation_results = await self._reconcile_amounts()
             
-            await self.send_update("date_validation", "Validating claim dates", 55.0)
+            await self.send_update("date_validation", "Validating claim dates and policy periods", 55.0)
+            await asyncio.sleep(0.3)
             date_validation = await self._validate_dates(claims_data)
             
-            await self.send_update("duplicate_check", "Checking for duplicate claims", 65.0)
+            await self.send_update("duplicate_check", "Checking for duplicate claims in database", 65.0)
+            await asyncio.sleep(0.3)
             duplicate_check = await self._check_duplicates(claims_data)
             
-            await self.send_update("compliance_validation", "Running compliance validations", 75.0)
+            await self.send_update("compliance_validation", "Running regulatory compliance checks", 75.0)
+            await asyncio.sleep(0.3)
             compliance_results = await self._validate_compliance()
             
-            await self.send_update("final_assessment", "Generating final assessment", 85.0)
+            await self.send_update("final_assessment", "Generating comprehensive final assessment", 85.0)
+            await asyncio.sleep(0.3)
             final_assessment = await self._generate_final_assessment()
             
             self.status = AgentStatus.COMPLETED
@@ -80,6 +91,8 @@ class ClaimsAnalysisAgent(BaseAgent):
             raise
     
     async def _initialize_agent(self, vector_store_path: str):
+        await self.send_tool_update("environment_setup", "Setting up OpenAI and database connections", "executing")
+        
         openai_api_key = os.getenv("OPENAI_API_KEY")
         database_url = os.getenv("DATABASE_URL")
         
@@ -88,12 +101,15 @@ class ClaimsAnalysisAgent(BaseAgent):
         
         self.llm = ChatOpenAI(model="gpt-4o", api_key=openai_api_key, temperature=0)
         
+        await self.send_tool_update("vector_store_loading", "Loading document embeddings", "executing")
         embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
         self.vector_store = FAISS.load_local(vector_store_path, embeddings, allow_dangerous_deserialization=True)
         
         if database_url:
+            await self.send_tool_update("database_connection", "Connecting to claims database", "executing")
             initialize_tools(self.vector_store, database_url, openai_api_key)
         
+        await self.send_tool_update("agent_tools_setup", "Configuring analysis tools", "executing")
         self.tools = [
             query_documents,
             extract_treaty_exclusions,
@@ -130,9 +146,14 @@ class ClaimsAnalysisAgent(BaseAgent):
             Always provide detailed reasoning for your conclusions and recommendations."""
         }
     )
+        
+        await self.send_tool_update("agent_tools_setup", "Analysis tools configured successfully", "completed")
     
     async def _extract_claims_data(self) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("extract_bordereaux_claims", "Extracting claims data from bordereaux documents", "executing")
+            await asyncio.sleep(1)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Extract all claims-related data from the documents. Look for:
@@ -145,12 +166,16 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            await self.send_tool_update("extract_bordereaux_claims", "Claims data extraction completed", "completed")
+            await self.send_analysis_update("data_extraction", "Successfully extracted claims data from documents")
+            
             return {
                 "extraction_successful": True,
                 "agent_response": response.get("output", ""),
                 "raw_data": response
             }
         except Exception as e:
+            await self.send_tool_update("extract_bordereaux_claims", f"Claims data extraction failed: {str(e)}", "failed")
             return {
                 "extraction_successful": False,
                 "error": str(e),
@@ -159,6 +184,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _run_fraud_detection(self, claims_data: Dict) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("fraud_analysis", "Analyzing claims for fraud indicators", "executing")
+            await asyncio.sleep(1.5)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Analyze the extracted claims data for potential fraud indicators:
@@ -172,13 +200,18 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            risk_level = self._extract_risk_level(response.get("output", ""))
+            await self.send_tool_update("fraud_analysis", f"Fraud analysis completed - Risk Level: {risk_level}", "completed")
+            await self.send_analysis_update("fraud_detection", f"Fraud risk assessment: {risk_level}", risk_level)
+            
             return {
                 "fraud_analysis_completed": True,
                 "agent_response": response.get("output", ""),
-                "risk_level": self._extract_risk_level(response.get("output", "")),
+                "risk_level": risk_level,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("fraud_analysis", f"Fraud analysis failed: {str(e)}", "failed")
             return {
                 "fraud_analysis_completed": False,
                 "error": str(e),
@@ -187,6 +220,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _check_exclusions(self, claims_data: Dict) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("validate_claim_against_exclusions", "Checking claims against treaty exclusions", "executing")
+            await asyncio.sleep(1.2)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Check all claims against treaty exclusions:
@@ -199,13 +235,21 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            violations_found = "violation" in response.get("output", "").lower()
+            status = "violations detected" if violations_found else "no violations found"
+            await self.send_tool_update("validate_claim_against_exclusions", f"Exclusion validation completed - {status}", "completed")
+            
+            risk_level = "HIGH" if violations_found else "LOW"
+            await self.send_analysis_update("exclusion_check", f"Treaty exclusion validation: {status}", risk_level)
+            
             return {
                 "exclusion_check_completed": True,
                 "agent_response": response.get("output", ""),
-                "violations_found": "violation" in response.get("output", "").lower(),
+                "violations_found": violations_found,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("validate_claim_against_exclusions", f"Exclusion validation failed: {str(e)}", "failed")
             return {
                 "exclusion_check_completed": False,
                 "error": str(e),
@@ -214,6 +258,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _reconcile_amounts(self) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("compare_bordereaux_vs_statement", "Reconciling amounts between documents", "executing")
+            await asyncio.sleep(1.3)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Reconcile amounts between different documents:
@@ -227,13 +274,21 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            discrepancies_found = "discrepancy" in response.get("output", "").lower()
+            status = "discrepancies found" if discrepancies_found else "amounts reconciled"
+            await self.send_tool_update("compare_bordereaux_vs_statement", f"Amount reconciliation completed - {status}", "completed")
+            
+            risk_level = "MEDIUM" if discrepancies_found else "LOW"
+            await self.send_analysis_update("amount_reconciliation", f"Amount reconciliation: {status}", risk_level)
+            
             return {
                 "reconciliation_completed": True,
                 "agent_response": response.get("output", ""),
-                "discrepancies_found": "discrepancy" in response.get("output", "").lower(),
+                "discrepancies_found": discrepancies_found,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("compare_bordereaux_vs_statement", f"Amount reconciliation failed: {str(e)}", "failed")
             return {
                 "reconciliation_completed": False,
                 "error": str(e),
@@ -242,6 +297,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _validate_dates(self, claims_data: Dict) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("validate_claim_dates", "Validating claim dates and policy periods", "executing")
+            await asyncio.sleep(1.1)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Validate all claim dates:
@@ -254,13 +312,21 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            validation_failures = "fail" in response.get("output", "").lower()
+            status = "validation failures detected" if validation_failures else "all dates valid"
+            await self.send_tool_update("validate_claim_dates", f"Date validation completed - {status}", "completed")
+            
+            risk_level = "MEDIUM" if validation_failures else "LOW"
+            await self.send_analysis_update("date_validation", f"Date validation: {status}", risk_level)
+            
             return {
                 "date_validation_completed": True,
                 "agent_response": response.get("output", ""),
-                "validation_failures": "fail" in response.get("output", "").lower(),
+                "validation_failures": validation_failures,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("validate_claim_dates", f"Date validation failed: {str(e)}", "failed")
             return {
                 "date_validation_completed": False,
                 "error": str(e),
@@ -269,6 +335,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _check_duplicates(self, claims_data: Dict) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("check_duplicate_claims_in_database", "Checking for duplicate claims in database", "executing")
+            await asyncio.sleep(1.4)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Check for duplicate claims:
@@ -281,13 +350,21 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            duplicates_found = "duplicate" in response.get("output", "").lower()
+            status = "duplicates detected" if duplicates_found else "no duplicates found"
+            await self.send_tool_update("check_duplicate_claims_in_database", f"Duplicate check completed - {status}", "completed")
+            
+            risk_level = "HIGH" if duplicates_found else "LOW"
+            await self.send_analysis_update("duplicate_check", f"Duplicate claims check: {status}", risk_level)
+            
             return {
                 "duplicate_check_completed": True,
                 "agent_response": response.get("output", ""),
-                "duplicates_found": "duplicate" in response.get("output", "").lower(),
+                "duplicates_found": duplicates_found,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("check_duplicate_claims_in_database", f"Duplicate check failed: {str(e)}", "failed")
             return {
                 "duplicate_check_completed": False,
                 "error": str(e),
@@ -296,6 +373,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _validate_compliance(self) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("compliance_validation", "Running regulatory compliance checks", "executing")
+            await asyncio.sleep(1.6)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Perform comprehensive compliance validation:
@@ -309,13 +389,21 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            compliance_issues = "violation" in response.get("output", "").lower() or "non-compliant" in response.get("output", "").lower()
+            status = "compliance issues detected" if compliance_issues else "fully compliant"
+            await self.send_tool_update("compliance_validation", f"Compliance validation completed - {status}", "completed")
+            
+            risk_level = "HIGH" if compliance_issues else "LOW"
+            await self.send_analysis_update("compliance_validation", f"Regulatory compliance: {status}", risk_level)
+            
             return {
                 "compliance_validation_completed": True,
                 "agent_response": response.get("output", ""),
-                "compliance_issues": "violation" in response.get("output", "").lower() or "non-compliant" in response.get("output", "").lower(),
+                "compliance_issues": compliance_issues,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("compliance_validation", f"Compliance validation failed: {str(e)}", "failed")
             return {
                 "compliance_validation_completed": False,
                 "error": str(e),
@@ -324,6 +412,9 @@ class ClaimsAnalysisAgent(BaseAgent):
     
     async def _generate_final_assessment(self) -> Dict[str, Any]:
         try:
+            await self.send_tool_update("final_assessment", "Generating comprehensive final assessment", "executing")
+            await asyncio.sleep(2)
+            
             response = await self.agent_executor.ainvoke({
                 "input": """
                 Generate a comprehensive final assessment based on all previous analyses:
@@ -337,13 +428,19 @@ class ClaimsAnalysisAgent(BaseAgent):
                 """
             })
             
+            recommendation = self._extract_recommendation(response.get("output", ""))
+            await self.send_tool_update("final_assessment", f"Final assessment completed - Recommendation: {recommendation}", "completed")
+            await self.send_analysis_update("final_assessment", f"Final recommendation: {recommendation}", 
+                                          "HIGH" if recommendation == "REJECT" else "MEDIUM" if recommendation == "REVIEW" else "LOW")
+            
             return {
                 "final_assessment_completed": True,
                 "agent_response": response.get("output", ""),
-                "recommendation": self._extract_recommendation(response.get("output", "")),
+                "recommendation": recommendation,
                 "raw_analysis": response
             }
         except Exception as e:
+            await self.send_tool_update("final_assessment", f"Final assessment failed: {str(e)}", "failed")
             return {
                 "final_assessment_completed": False,
                 "error": str(e),

@@ -80,6 +80,12 @@ async def handle_client_message(websocket: WebSocketServerProtocol, message: Dic
                 "timestamp": asyncio.get_event_loop().time()
             })
             
+        elif message_type == "ping":
+            await websocket_manager.send_to_client(websocket, {
+                "type": "pong",
+                "timestamp": asyncio.get_event_loop().time()
+            })
+            
         else:
             await websocket_manager.send_to_client(websocket, {
                 "type": "error",
@@ -96,11 +102,12 @@ async def handle_client_message(websocket: WebSocketServerProtocol, message: Dic
         })
 
 async def websocket_handler(websocket: WebSocketServerProtocol, path: str):
-    await websocket_manager.register(websocket)
+    session_id = await websocket_manager.register(websocket)
     
     try:
         await websocket_manager.send_to_client(websocket, {
             "type": "welcome",
+            "session_id": session_id,
             "message": "Connected to Claims Processing Pipeline",
             "available_commands": [
                 "start_processing",
@@ -108,7 +115,8 @@ async def websocket_handler(websocket: WebSocketServerProtocol, path: str):
                 "stop_agent",
                 "get_active_agents",
                 "get_pipeline_stats",
-                "get_processing_history"
+                "get_processing_history",
+                "ping"
             ],
             "timestamp": asyncio.get_event_loop().time()
         })
@@ -132,17 +140,25 @@ async def websocket_handler(websocket: WebSocketServerProtocol, path: str):
                 })
                 
     except websockets.exceptions.ConnectionClosed:
-        logger.info("Client disconnected")
+        logger.info(f"Client {session_id} disconnected")
     except Exception as e:
         logger.error(f"Websocket handler error: {e}")
     finally:
         await websocket_manager.unregister(websocket)
 
 async def start_websocket_server(host: str = "localhost", port: int = 8765):
-    logger.info(f"Starting WebSocket server on {host}:{port}")
+    logger.info(f"Starting Enhanced WebSocket server on {host}:{port}")
     
-    server = await websockets.serve(websocket_handler, host, port)
-    logger.info(f"WebSocket server started successfully")
+    server = await websockets.serve(
+        websocket_handler, 
+        host, 
+        port,
+        ping_interval=20,
+        ping_timeout=10
+    )
+    
+    logger.info(f"Enhanced WebSocket server started successfully")
+    logger.info(f"Real-time updates enabled for claims processing")
     
     try:
         await server.wait_closed()

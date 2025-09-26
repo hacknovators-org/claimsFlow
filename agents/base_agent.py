@@ -5,6 +5,7 @@ from enum import Enum
 import asyncio
 import json
 from datetime import datetime
+import time
 
 class AgentStatus(Enum):
     INITIALIZED = "initialized"
@@ -34,11 +35,20 @@ class BaseAgent(ABC):
         self.progress = 0.0
         self.results = {}
         self.errors = []
+        self.stage_start_time = None
     
     async def send_update(self, stage: str, message: str, progress: float, data: Dict = None, error: str = None):
         if error:
             self.status = AgentStatus.FAILED
             self.errors.append(error)
+        
+        if self.current_stage != stage:
+            if self.stage_start_time and self.websocket_manager:
+                duration = time.time() - self.stage_start_time
+                await self.websocket_manager.send_stage_completion(
+                    self.agent_id, self.current_stage, duration, success=not error
+                )
+            self.stage_start_time = time.time()
         
         self.current_stage = stage
         self.progress = progress
@@ -55,16 +65,32 @@ class BaseAgent(ABC):
         )
         
         if self.websocket_manager:
-            await self.websocket_manager.broadcast(json.dumps({
-                "agent_id": update.agent_id,
-                "timestamp": update.timestamp.isoformat(),
-                "status": update.status.value,
-                "stage": update.stage,
-                "message": update.message,
-                "progress": update.progress,
-                "data": update.data,
-                "error": update.error
-            }))
+            await self.websocket_manager.send_progress_update(
+                agent_id=update.agent_id,
+                stage=update.stage,
+                message=update.message,
+                progress=update.progress,
+                data=update.data,
+                error=update.error
+            )
+    
+    async def send_tool_update(self, tool_name: str, tool_description: str, status: str = "executing"):
+        if self.websocket_manager:
+            await self.websocket_manager.send_tool_execution(
+                agent_id=self.agent_id,
+                tool_name=tool_name,
+                tool_description=tool_description,
+                status=status
+            )
+    
+    async def send_analysis_update(self, analysis_type: str, result: str, risk_level: str = "LOW"):
+        if self.websocket_manager:
+            await self.websocket_manager.send_analysis_result(
+                agent_id=self.agent_id,
+                analysis_type=analysis_type,
+                result=result,
+                risk_level=risk_level
+            )
     
     @abstractmethod
     async def execute(self, **kwargs) -> Dict[str, Any]:
