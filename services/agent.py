@@ -125,7 +125,7 @@ class DocumentEmbeddingSystem:
         print(f"Vector store saved to: {save_path}")
     
     def load_vector_store(self, load_path: str = "faiss_index") -> FAISS:
-        vector_store = FAISS.load_local(load_path, self.embeddings)
+        vector_store = FAISS.load_local(load_path, self.embeddings, allow_dangerous_deserialization=True)
         print(f"Vector store loaded from: {load_path}")
         return vector_store
     

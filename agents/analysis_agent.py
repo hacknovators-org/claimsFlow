@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any, List
-from langchain.agents import create_react_agent, AgentExecutor
+from langchain.agents import create_react_agent, AgentExecutor, initialize_agent, AgentType
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain.vectorstores import FAISS
@@ -89,7 +89,7 @@ class ClaimsAnalysisAgent(BaseAgent):
         self.llm = ChatOpenAI(model="gpt-4o", api_key=openai_api_key, temperature=0)
         
         embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-        self.vector_store = FAISS.load_local(vector_store_path, embeddings)
+        self.vector_store = FAISS.load_local(vector_store_path, embeddings, allow_dangerous_deserialization=True)
         
         if database_url:
             initialize_tools(self.vector_store, database_url, openai_api_key)
@@ -108,35 +108,28 @@ class ClaimsAnalysisAgent(BaseAgent):
             calculate_recovery_amounts
         ]
         
-        prompt = PromptTemplate.from_template("""
-        You are a professional reinsurance claims analyst. Use the available tools to thoroughly analyze the claims documents.
-        
-        Your analysis should cover:
-        1. Document completeness and data extraction
-        2. Fraud detection and risk assessment
-        3. Treaty compliance and exclusions validation
-        4. Amount reconciliation between bordereaux and statements
-        5. Date validations and policy period compliance
-        6. Duplicate claims detection
-        7. Regulatory compliance checks
-        
-        Always provide detailed reasoning for your conclusions and recommendations.
-        
-        Tools available: {tool_names}
-        
-        Question: {input}
-        
-        Thought: {agent_scratchpad}
-        """)
-        
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        self.agent_executor = AgentExecutor(
-            agent=agent, 
-            tools=self.tools, 
-            verbose=True,
-            max_iterations=10,
-            handle_parsing_errors=True
-        )
+        self.agent_executor = initialize_agent(
+        tools=self.tools,
+        llm=self.llm,
+        agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+        verbose=True,
+        max_iterations=10,
+        handle_parsing_errors=True,
+        agent_kwargs={
+            "prefix": """You are a professional reinsurance claims analyst. Use the available tools to thoroughly analyze the claims documents.
+            
+            Your analysis should cover:
+            1. Document completeness and data extraction
+            2. Fraud detection and risk assessment
+            3. Treaty compliance and exclusions validation
+            4. Amount reconciliation between bordereaux and statements
+            5. Date validations and policy period compliance
+            6. Duplicate claims detection
+            7. Regulatory compliance checks
+            
+            Always provide detailed reasoning for your conclusions and recommendations."""
+        }
+    )
     
     async def _extract_claims_data(self) -> Dict[str, Any]:
         try:
