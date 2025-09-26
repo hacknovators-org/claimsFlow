@@ -156,6 +156,47 @@ class ReportGenerationAgent(BaseAgent):
                     border: 1px solid #c3e6cb;
                     color: #155724;
                 }
+                .signature-section {
+                    margin-top: 50px;
+                    padding: 30px;
+                    border: 2px solid #007bff;
+                    background-color: #f8f9fa;
+                    page-break-inside: avoid;
+                }
+                .signature-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 40px;
+                    margin-top: 30px;
+                }
+                .signature-box {
+                    border: 1px solid #ddd;
+                    padding: 20px;
+                    background-color: white;
+                    min-height: 120px;
+                }
+                .signature-box h4 {
+                    margin: 0 0 15px 0;
+                    color: #1e3c72;
+                    font-size: 1.1em;
+                }
+                .signature-line {
+                    border-bottom: 1px solid #333;
+                    height: 50px;
+                    margin: 20px 0 10px 0;
+                }
+                .signature-label {
+                    font-size: 0.9em;
+                    color: #666;
+                    margin-top: 5px;
+                }
+                .date-line {
+                    border-bottom: 1px solid #333;
+                    width: 150px;
+                    height: 30px;
+                    margin: 10px 0;
+                    display: inline-block;
+                }
                 .footer {
                     margin-top: 40px;
                     text-align: center;
@@ -373,9 +414,71 @@ class ReportGenerationAgent(BaseAgent):
                 {% endif %}
             </div>
 
+            <div class="signature-section">
+                <h2>Authorization and Approval</h2>
+                <p><strong>This report requires the following authorizations before claim processing can proceed:</strong></p>
+                
+                <div class="signature-grid">
+                    <div class="signature-box">
+                        <h4>Claims Analyst</h4>
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Signature</div>
+                        <br>
+                        <strong>Print Name:</strong> _________________________
+                        <br><br>
+                        <strong>Date:</strong> <span class="date-line"></span>
+                    </div>
+                    
+                    <div class="signature-box">
+                        <h4>Supervisor Review</h4>
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Signature</div>
+                        <br>
+                        <strong>Print Name:</strong> _________________________
+                        <br><br>
+                        <strong>Date:</strong> <span class="date-line"></span>
+                    </div>
+                    
+                    <div class="signature-box">
+                        <h4>Underwriting Manager</h4>
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Signature</div>
+                        <br>
+                        <strong>Print Name:</strong> _________________________
+                        <br><br>
+                        <strong>Date:</strong> <span class="date-line"></span>
+                    </div>
+                    
+                    <div class="signature-box">
+                        <h4>Final Authorization</h4>
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Signature</div>
+                        <br>
+                        <strong>Print Name:</strong> _________________________
+                        <br>
+                        <strong>Title:</strong> _________________________
+                        <br>
+                        <strong>Date:</strong> <span class="date-line"></span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px; padding: 15px; border: 1px solid #007bff; background-color: #e3f2fd;">
+                    <h4>Approval Status:</h4>
+                    <p>☐ <strong>APPROVED</strong> - Proceed with claim processing</p>
+                    <p>☐ <strong>CONDITIONALLY APPROVED</strong> - Proceed with conditions noted above</p>
+                    <p>☐ <strong>REJECTED</strong> - Do not process claim</p>
+                    <p>☐ <strong>REQUIRES ADDITIONAL REVIEW</strong> - Escalate to senior management</p>
+                </div>
+                
+                <div style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                    <p><strong>Note:</strong> This document serves as official authorization for claims processing. All signatures must be obtained before proceeding with payment or rejection actions.</p>
+                </div>
+            </div>
+
             <div class="footer">
                 <p>This report was generated by the Automated Claims Processing System</p>
                 <p>Report ID: {{ report_id }} | Generated: {{ report_date }}</p>
+                <p><strong>Confidential Document - For Internal Use Only</strong></p>
             </div>
         </body>
         </html>
@@ -425,6 +528,9 @@ class ReportGenerationAgent(BaseAgent):
             }
             .page-break {
                 page-break-before: always;
+            }
+            .signature-section {
+                page-break-inside: avoid;
             }
         ''')
         

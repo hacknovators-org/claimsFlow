@@ -49,7 +49,7 @@ class SimpleEmailAnalyzer:
 
     def create_analysis_prompt(self, email_subject: str, email_body: str, attachments: List[str]) -> str:
         prompt = f"""
-You are an insurance document expert. Analyze this email to determine which required documents are present and which are missing.
+You are an insurance document expert. Analyze this email to determine which required documents are present.
 
 EMAIL SUBJECT: {email_subject}
 
@@ -64,17 +64,15 @@ MANDATORY DOCUMENTS (all 3 must be present for completeness):
 2. Claims Bordereaux - Tabular claims data with amounts, dates, policy numbers  
 3. Cedant/Insurer Statement - Quarterly statement with totals and recoveries
 
-OPTIONAL DOCUMENTS (not required for completeness):
-- Treaty Slip/Contract
-- SICS Treaty Slip
+IMPORTANT: A single PDF file may contain multiple document types on different pages. For example:
+- Page 1: Claims Statement
+- Page 2: Claims Bordereaux
+This should count as having BOTH documents present.
 
-TASK:
-Analyze the email content and attachments to determine:
-1. Which of the mandatory and optional documents are present
-2. Classification confidence (High/Medium/Low)
-3. Key identifiers found (claim numbers, policy numbers, amounts, etc.)
-4. Which of the 3 mandatory documents are missing
-5. Overall completion status (Complete only if all 3 mandatory docs are present)
+ANALYSIS RULES:
+- If a PDF contains tabular data AND statement information, mark BOTH bordereaux AND statement as present
+- Look for keywords indicating multiple document types within single files
+- Consider combined documents as complete submissions
 
 Respond in this exact JSON format:
 {{
@@ -84,19 +82,25 @@ Respond in this exact JSON format:
         "documents_found": [
             {{
                 "filename": "exact_filename.pdf",
-                "document_type": "Claims Notification Document",
+                "document_type": "Claims Bordereaux",
                 "confidence": "High",
-                "key_identifiers": ["CLM-2024-001", "Policy ABC123"]
+                "key_identifiers": ["Table data", "Transaction dates"]
+            }},
+            {{
+                "filename": "exact_filename.pdf",
+                "document_type": "Cedant/Insurer Statement",
+                "confidence": "High", 
+                "key_identifiers": ["Account balance", "Total income"]
             }}
         ],
-        "all_documents_present": false,
-        "missing_documents": ["Claims Bordereaux"],
-        "completion_status": "Incomplete",
-        "summary": "Found 2 mandatory documents. Missing Claims Bordereaux."
+        "all_documents_present": true,
+        "missing_documents": [],
+        "completion_status": "Complete",
+        "summary": "All mandatory documents found. Combined PDF contains both bordereaux and statement."
     }}
 }}
 
-Be strict - only mark as "Complete" if all 3 mandatory document types are clearly present.
+Mark as "Complete" if all 3 mandatory document types are identified, even if in combined files.
 """
         return prompt
 
@@ -105,7 +109,7 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are an expert insurance document analyst. Always respond with valid JSON in the exact format requested."},
+                    {"role": "system", "content": "You are an expert insurance document analyst. Recognize that single files can contain multiple document types. Always respond with valid JSON in the exact format requested."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
@@ -157,13 +161,16 @@ Be strict - only mark as "Complete" if all 3 mandatory document types are clearl
                 except (ValueError, KeyError) as e:
                     logging.warning(f"Error parsing document: {e}")
 
+            found_doc_types = [doc.document_type.value for doc in documents_found]
+            missing_docs = [doc_type for doc_type in MANDATORY_DOCS if doc_type not in found_doc_types]
+
             return AnalysisReport(
                 email_subject=analysis_data.get("email_subject", email_subject),
                 sender=analysis_data.get("sender", "Unknown"),
                 documents_found=documents_found,
-                all_documents_present=analysis_data.get("all_documents_present", False),
-                missing_documents=analysis_data.get("missing_documents", []),
-                completion_status=analysis_data.get("completion_status", "Unknown"),
+                all_documents_present=len(missing_docs) == 0,
+                missing_documents=missing_docs,
+                completion_status="Complete" if len(missing_docs) == 0 else "Incomplete",
                 summary=analysis_data.get("summary", "No summary provided")
             )
 

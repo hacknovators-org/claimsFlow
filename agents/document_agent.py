@@ -30,20 +30,23 @@ class DocumentAgent(BaseAgent):
             if not email_content:
                 raise Exception(f"No emails found from {sender_email}")
             
-            await self.send_update("email_analysis", "Analyzing email content", 20.0)
-            email_analysis = await self._analyze_email(email_content)
-            
-            await self.send_update("attachment_download", "Downloading email attachments", 30.0)
+            await self.send_update("attachment_download", "Downloading email attachments", 20.0)
             downloaded_files = await self._download_attachments(email_content)
             
             if not downloaded_files:
                 raise Exception("No attachments found in email")
             
-            await self.send_update("document_processing", "Processing documents and creating embeddings", 50.0)
+            await self.send_update("document_preprocessing", "Analyzing document structure and content", 35.0)
+            document_analysis = await self._analyze_document_structure(downloaded_files)
+            
+            await self.send_update("email_analysis", "Re-analyzing email content with enhanced detection", 45.0)
+            email_analysis = await self._analyze_email_enhanced(email_content, document_analysis)
+            
+            await self.send_update("document_processing", "Processing documents and creating embeddings", 60.0)
             vector_store = await self._create_embeddings(downloaded_files)
             
             await self.send_update("data_validation", "Validating document completeness", 80.0)
-            validation_results = await self._validate_documents(email_analysis, downloaded_files)
+            validation_results = await self._validate_documents(email_analysis, downloaded_files, document_analysis)
             
             self.status = AgentStatus.COMPLETED
             self.results = {
@@ -66,6 +69,7 @@ class DocumentAgent(BaseAgent):
                         for doc in email_analysis.documents_found
                     ]
                 },
+                "document_analysis": document_analysis,
                 "downloaded_files": downloaded_files,
                 "vector_store_path": self.vector_store_path,
                 "validation_results": validation_results
@@ -100,14 +104,6 @@ class DocumentAgent(BaseAgent):
             latest_email = self.gmail_connector.read_latest_email_from_sender(sender_email)
             return latest_email
     
-    async def _analyze_email(self, email_content):
-        analysis = self.email_analyzer.analyze_email_content(
-            email_content.subject,
-            email_content.body_text,
-            email_content.attachment_filenames
-        )
-        return analysis
-    
     async def _download_attachments(self, email_content) -> List[str]:
         if Path(self.download_folder).exists():
             shutil.rmtree(self.download_folder)
@@ -121,6 +117,127 @@ class DocumentAgent(BaseAgent):
         
         return downloaded_files
     
+    async def _analyze_document_structure(self, downloaded_files: List[str]) -> Dict[str, Any]:
+        document_analysis = {
+            "total_files": len(downloaded_files),
+            "file_analysis": [],
+            "detected_document_types": set(),
+            "combined_documents": []
+        }
+        
+        for file_path in downloaded_files:
+            file_analysis = await self._analyze_single_file(file_path)
+            document_analysis["file_analysis"].append(file_analysis)
+            
+            for doc_type in file_analysis.get("detected_types", []):
+                document_analysis["detected_document_types"].add(doc_type)
+            
+            if len(file_analysis.get("detected_types", [])) > 1:
+                document_analysis["combined_documents"].append({
+                    "filename": file_analysis["filename"],
+                    "types": file_analysis["detected_types"],
+                    "pages": file_analysis.get("total_pages", 1)
+                })
+        
+        document_analysis["detected_document_types"] = list(document_analysis["detected_document_types"])
+        
+        return document_analysis
+    
+    async def _analyze_single_file(self, file_path: str) -> Dict[str, Any]:
+        import fitz
+        from pathlib import Path
+        
+        path = Path(file_path)
+        file_analysis = {
+            "filename": path.name,
+            "file_type": path.suffix.lower(),
+            "detected_types": [],
+            "page_analysis": []
+        }
+        
+        if path.suffix.lower() == '.pdf':
+            try:
+                pdf_doc = fitz.open(file_path)
+                file_analysis["total_pages"] = len(pdf_doc)
+                
+                for page_num in range(len(pdf_doc)):
+                    page = pdf_doc[page_num]
+                    page_text = page.get_text()
+                    
+                    doc_type = self._classify_page_content(page_text)
+                    file_analysis["page_analysis"].append({
+                        "page": page_num + 1,
+                        "document_type": doc_type,
+                        "content_length": len(page_text),
+                        "has_tables": self._detect_tabular_content(page_text)
+                    })
+                    
+                    if doc_type != "unknown" and doc_type not in file_analysis["detected_types"]:
+                        file_analysis["detected_types"].append(doc_type)
+                
+                pdf_doc.close()
+                
+            except Exception:
+                file_analysis["detected_types"] = ["unknown"]
+                file_analysis["total_pages"] = 1
+        
+        else:
+            file_analysis["detected_types"] = [self._classify_file_by_extension(path.suffix.lower())]
+            file_analysis["total_pages"] = 1
+        
+        return file_analysis
+    
+    def _classify_page_content(self, content: str) -> str:
+        content_lower = content.lower()
+        
+        if any(term in content_lower for term in ["bordereaux", "claim number", "transaction date", "paid amount", "outstanding"]):
+            return "claims_bordereaux"
+        elif any(term in content_lower for term in ["statement", "quarterly", "account", "balance", "commission", "total income"]):
+            return "cedant_statement"
+        elif any(term in content_lower for term in ["notification", "claim notification", "insured name", "date of loss"]):
+            return "claim_notification"
+        elif any(term in content_lower for term in ["treaty", "reinsured", "commission rate", "profit commission"]):
+            return "treaty_contract"
+        else:
+            return "unknown"
+    
+    def _classify_file_by_extension(self, extension: str) -> str:
+        if extension in ['.xlsx', '.xls']:
+            return "claims_bordereaux"
+        elif extension in ['.docx', '.doc']:
+            return "claim_notification"
+        else:
+            return "unknown"
+    
+    def _detect_tabular_content(self, content: str) -> bool:
+        lines = content.split('\n')
+        tabular_indicators = 0
+        
+        for line in lines:
+            if len(line.split()) > 3 and any(char.isdigit() for char in line):
+                tabular_indicators += 1
+        
+        return tabular_indicators > 3
+    
+    async def _analyze_email_enhanced(self, email_content, document_analysis):
+        attachment_info = []
+        
+        for file_info in document_analysis["file_analysis"]:
+            if file_info["detected_types"]:
+                for doc_type in file_info["detected_types"]:
+                    attachment_info.append(f"{file_info['filename']} - {doc_type}")
+            else:
+                attachment_info.append(file_info['filename'])
+        
+        enhanced_body = f"{email_content.body_text}\n\nDETAILED FILE ANALYSIS:\n" + "\n".join(attachment_info)
+        
+        analysis = self.email_analyzer.analyze_email_content(
+            email_content.subject,
+            enhanced_body,
+            email_content.attachment_filenames
+        )
+        return analysis
+    
     async def _create_embeddings(self, downloaded_files: List[str]):
         try:
             vector_store = self.embedding_system.build_vector_store(self.vector_store_path)
@@ -128,15 +245,28 @@ class DocumentAgent(BaseAgent):
         except Exception as e:
             raise Exception(f"Failed to create embeddings: {str(e)}")
     
-    async def _validate_documents(self, email_analysis, downloaded_files: List[str]) -> Dict[str, Any]:
+    async def _validate_documents(self, email_analysis, downloaded_files: List[str], document_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        detected_types = set(document_analysis.get("detected_document_types", []))
+        
+        mandatory_types = {"claims_bordereaux", "cedant_statement", "claim_notification"}
+        missing_types = mandatory_types - detected_types
+        
+        completeness_override = len(missing_types) == 0
+        
         return {
             "total_files": len(downloaded_files),
             "document_types_identified": len(email_analysis.documents_found),
-            "completeness_check": {
-                "status": email_analysis.completion_status,
-                "all_mandatory_present": email_analysis.all_documents_present,
-                "missing_documents": email_analysis.missing_documents
+            "enhanced_detection": {
+                "detected_types": list(detected_types),
+                "missing_types": list(missing_types),
+                "completeness_override": completeness_override
             },
+            "completeness_check": {
+                "status": "Complete" if completeness_override else email_analysis.completion_status,
+                "all_mandatory_present": completeness_override or email_analysis.all_documents_present,
+                "missing_documents": list(missing_types) if missing_types else email_analysis.missing_documents
+            },
+            "combined_documents": document_analysis.get("combined_documents", []),
             "file_processing_status": "success",
             "embedding_status": "completed"
         }

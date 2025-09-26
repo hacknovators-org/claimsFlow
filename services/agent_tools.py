@@ -12,7 +12,6 @@ import os
 from datetime import datetime, date
 import pandas as pd
 
-# Global variables for vector store and database
 vector_store: FAISS = None
 db_engine = None
 embeddings = None
@@ -25,7 +24,7 @@ def initialize_tools(vector_store_instance: FAISS, database_url: str, openai_api
 
 @tool
 def query_documents(query: str, k: int = 5) -> str:
-    """Query the vector store to find relevant document content"""
+    """Query the vector store to find relevant document content with enhanced page-level analysis"""
     if not vector_store:
         return "Vector store not initialized"
     
@@ -33,13 +32,111 @@ def query_documents(query: str, k: int = 5) -> str:
     formatted_results = []
     
     for i, doc in enumerate(results):
+        doc_type = doc.metadata.get("document_type", "unknown")
+        page_num = doc.metadata.get("page_number", "N/A")
+        
         formatted_results.append({
             "source": doc.metadata.get("filename", "Unknown"),
+            "page_number": page_num,
+            "document_type": doc_type,
             "content": doc.page_content[:500],
+            "content_length": len(doc.page_content),
             "relevance_rank": i + 1
         })
     
     return json.dumps(formatted_results, indent=2)
+
+@tool
+def extract_bordereaux_claims() -> str:
+    """Extract claims data from bordereaux documents with page-specific targeting"""
+    if not vector_store:
+        return "Vector store not initialized"
+    
+    bordereaux_queries = [
+        "bordereaux claims paid outstanding transaction",
+        "claim number transaction date paid amount",
+        "settlement case outstanding claims table",
+        "policy number claim amount transaction"
+    ]
+    
+    claims_data = []
+    
+    for query in bordereaux_queries:
+        results = vector_store.similarity_search(query, k=3)
+        
+        for doc in results:
+            doc_type = doc.metadata.get("document_type", "")
+            filename = doc.metadata.get("filename", "").lower()
+            
+            if doc_type == "claims_bordereaux" or "bordereaux" in filename or "bordereaux" in doc.page_content.lower():
+                claims_data.append({
+                    "source": doc.metadata.get("filename", "Unknown"),
+                    "page_number": doc.metadata.get("page_number", "N/A"),
+                    "document_type": doc_type,
+                    "content": doc.page_content[:800],
+                    "extraction_method": "bordereaux_specific"
+                })
+    
+    if not claims_data:
+        generic_results = vector_store.similarity_search("claims data amounts table", k=5)
+        for doc in generic_results:
+            content_lower = doc.page_content.lower()
+            if any(term in content_lower for term in ["claim", "paid", "outstanding", "amount"]):
+                claims_data.append({
+                    "source": doc.metadata.get("filename", "Unknown"),
+                    "page_number": doc.metadata.get("page_number", "N/A"),
+                    "document_type": doc.metadata.get("document_type", "unknown"),
+                    "content": doc.page_content[:800],
+                    "extraction_method": "generic_search"
+                })
+    
+    return json.dumps(claims_data, indent=2)
+
+@tool
+def extract_statement_totals() -> str:
+    """Extract total amounts from cedant statements with page-specific targeting"""
+    if not vector_store:
+        return "Vector store not initialized"
+    
+    statement_queries = [
+        "statement total claims balance income",
+        "quarterly account commission premium",
+        "total income outgo balance cedant",
+        "account period underwriting year"
+    ]
+    
+    statement_data = []
+    
+    for query in statement_queries:
+        results = vector_store.similarity_search(query, k=3)
+        
+        for doc in results:
+            doc_type = doc.metadata.get("document_type", "")
+            filename = doc.metadata.get("filename", "").lower()
+            
+            if doc_type == "cedant_statement" or "statement" in filename or "account" in doc.page_content.lower():
+                statement_data.append({
+                    "source": doc.metadata.get("filename", "Unknown"),
+                    "page_number": doc.metadata.get("page_number", "N/A"),
+                    "document_type": doc_type,
+                    "content": doc.page_content[:800],
+                    "extraction_method": "statement_specific"
+                })
+    
+    if not statement_data:
+        generic_results = vector_store.similarity_search("total balance premium commission", k=5)
+        for doc in generic_results:
+            content_lower = doc.page_content.lower()
+            if any(term in content_lower for term in ["total", "balance", "commission", "premium"]):
+                statement_data.append({
+                    "source": doc.metadata.get("filename", "Unknown"),
+                    "page_number": doc.metadata.get("page_number", "N/A"),
+                    "document_type": doc.metadata.get("document_type", "unknown"),
+                    "content": doc.page_content[:800],
+                    "extraction_method": "generic_search"
+                })
+    
+    return json.dumps(statement_data, indent=2)
 
 @tool
 def extract_treaty_exclusions(treaty_name: str = "") -> str:
@@ -57,10 +154,37 @@ def extract_treaty_exclusions(treaty_name: str = "") -> str:
         if "exclusion" in content or "excluded" in content:
             exclusions.append({
                 "source": doc.metadata.get("filename", "Unknown"),
+                "page_number": doc.metadata.get("page_number", "N/A"),
+                "document_type": doc.metadata.get("document_type", "unknown"),
                 "exclusion_text": doc.page_content[:300]
             })
     
     return json.dumps(exclusions, indent=2)
+
+@tool
+def extract_notification_details(claim_number: str = "") -> str:
+    """Extract claim notification details from documents"""
+    query = f"claim notification {claim_number}" if claim_number else "claim notification insured loss date"
+    
+    if not vector_store:
+        return "Vector store not initialized"
+    
+    results = vector_store.similarity_search(query, k=3)
+    notification_data = []
+    
+    for doc in results:
+        doc_type = doc.metadata.get("document_type", "")
+        filename = doc.metadata.get("filename", "").lower()
+        
+        if doc_type == "claim_notification" or "notification" in filename or "notification" in doc.page_content.lower():
+            notification_data.append({
+                "source": doc.metadata.get("filename", "Unknown"),
+                "page_number": doc.metadata.get("page_number", "N/A"),
+                "document_type": doc_type,
+                "content": doc.page_content[:400]
+            })
+    
+    return json.dumps(notification_data, indent=2)
 
 @tool
 def validate_claim_against_exclusions(claim_description: str, cause_of_loss: str) -> str:
@@ -71,7 +195,6 @@ def validate_claim_against_exclusions(claim_description: str, cause_of_loss: str
     violations = []
     claim_text = f"{claim_description} {cause_of_loss}".lower()
     
-    # Comprehensive exclusions based on actual treaty terms
     exclusion_keywords = {
         "nuclear": ["nuclear", "radioactive", "contamination", "atomic"],
         "war": ["war", "warlike", "hostilities", "rebellion", "revolution", "civil war"],
@@ -114,48 +237,6 @@ def validate_claim_against_exclusions(claim_description: str, cause_of_loss: str
     }, indent=2)
 
 @tool
-def extract_bordereaux_claims() -> str:
-    """Extract claims data from bordereaux documents"""
-    query = "bordereaux claims paid outstanding transaction settlement"
-    
-    if not vector_store:
-        return "Vector store not initialized"
-    
-    results = vector_store.similarity_search(query, k=5)
-    claims_data = []
-    
-    for doc in results:
-        if "bordereaux" in doc.metadata.get("filename", "").lower():
-            claims_data.append({
-                "source": doc.metadata.get("filename", "Unknown"),
-                "content": doc.page_content[:400],
-                "document_type": "bordereaux"
-            })
-    
-    return json.dumps(claims_data, indent=2)
-
-@tool
-def extract_statement_totals() -> str:
-    """Extract total amounts from cedant statements"""
-    query = "statement total claims paid outstanding balance"
-    
-    if not vector_store:
-        return "Vector store not initialized"
-    
-    results = vector_store.similarity_search(query, k=3)
-    statement_data = []
-    
-    for doc in results:
-        if "statement" in doc.metadata.get("filename", "").lower():
-            statement_data.append({
-                "source": doc.metadata.get("filename", "Unknown"),
-                "content": doc.page_content[:400],
-                "document_type": "statement"
-            })
-    
-    return json.dumps(statement_data, indent=2)
-
-@tool
 def compare_bordereaux_vs_statement(underwriting_year: int) -> str:
     """Compare bordereaux totals against statement totals for specific year"""
     bordereaux_data = json.loads(extract_bordereaux_claims())
@@ -166,8 +247,10 @@ def compare_bordereaux_vs_statement(underwriting_year: int) -> str:
         "bordereaux_sources": [item["source"] for item in bordereaux_data],
         "statement_sources": [item["source"] for item in statement_data],
         "data_available": len(bordereaux_data) > 0 and len(statement_data) > 0,
-        "requires_manual_verification": True,
-        "recommendation": "Manual review required for amount reconciliation"
+        "bordereaux_pages_found": len(bordereaux_data),
+        "statement_pages_found": len(statement_data),
+        "requires_manual_verification": len(bordereaux_data) == 0 or len(statement_data) == 0,
+        "recommendation": "Data found for comparison" if len(bordereaux_data) > 0 and len(statement_data) > 0 else "Manual review required for amount reconciliation"
     }
     
     return json.dumps(comparison, indent=2)
@@ -207,7 +290,6 @@ def check_duplicate_claims_in_database(claim_id: str, insured_name: str = "") ->
     
     try:
         with db_engine.connect() as conn:
-            # Check by claim_id
             query = text("SELECT * FROM cash_calls WHERE claim_id = :claim_id")
             result = conn.execute(query, {"claim_id": claim_id})
             existing_claims = result.fetchall()
@@ -236,27 +318,6 @@ def check_duplicate_claims_in_database(claim_id: str, insured_name: str = "") ->
             "error": f"Database query failed: {str(e)}",
             "recommendation": "MANUAL_REVIEW"
         })
-
-@tool
-def extract_notification_details(claim_number: str = "") -> str:
-    """Extract claim notification details from documents"""
-    query = f"claim notification {claim_number}" if claim_number else "claim notification insured loss date"
-    
-    if not vector_store:
-        return "Vector store not initialized"
-    
-    results = vector_store.similarity_search(query, k=3)
-    notification_data = []
-    
-    for doc in results:
-        if "notification" in doc.metadata.get("filename", "").lower():
-            notification_data.append({
-                "source": doc.metadata.get("filename", "Unknown"),
-                "content": doc.page_content[:400],
-                "document_type": "notification"
-            })
-    
-    return json.dumps(notification_data, indent=2)
 
 @tool
 def validate_accounting_quarter(claim_date: str, accounting_quarter: str) -> str:
@@ -288,7 +349,6 @@ def validate_accounting_quarter(claim_date: str, accounting_quarter: str) -> str
             "error": f"Quarter validation failed: {str(e)}",
             "recommendation": "MANUAL_REVIEW"
         })
-
 
 @tool
 def calculate_recovery_amounts() -> str:
