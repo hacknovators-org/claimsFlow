@@ -632,12 +632,109 @@ KEY FINDINGS:"""
         return issues
     
     def _extract_amounts(self, analysis_results: Dict[str, Any]) -> Dict[str, str]:
-        return {
+        """Extract actual amounts from analysis results"""
+        
+        # Get the raw analysis responses
+        reconciliation_response = analysis_results.get("reconciliation_results", {}).get("raw_analysis", {})
+        
+        # Default amounts
+        amounts = {
             "bordereaux_total": "0.00",
             "statement_total": "0.00", 
             "variance": "0.00",
             "variance_percent": "0.0"
         }
+        
+        # Try to extract amounts from the agent response
+        if reconciliation_response and "output" in reconciliation_response:
+            response_text = reconciliation_response["output"]
+            
+            try:
+                # Try to parse JSON from the response
+                import json
+                import re
+                
+                # Look for JSON in the response
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    data = json.loads(json_match.group())
+                    
+                    # Extract amounts from the comparison data
+                    if "amounts" in data:
+                        amounts_data = data["amounts"]
+                        amounts["bordereaux_total"] = f"{amounts_data.get('bordereaux_total_paid', 0):,.2f}"
+                        amounts["statement_total"] = f"{amounts_data.get('statement_claims_paid', 0):,.2f}"
+                        amounts["variance"] = f"{amounts_data.get('variance', 0):,.2f}"
+                        amounts["variance_percent"] = f"{amounts_data.get('variance_percent', 0):.1f}"
+                
+                # Also try to extract from simple text patterns
+                bordereaux_match = re.search(r'bordereaux.*?([0-9,]+\.?\d*)', response_text.lower())
+                statement_match = re.search(r'statement.*?([0-9,]+\.?\d*)', response_text.lower())
+                
+                if bordereaux_match:
+                    try:
+                        bordereaux_amount = float(bordereaux_match.group(1).replace(',', ''))
+                        amounts["bordereaux_total"] = f"{bordereaux_amount:,.2f}"
+                    except:
+                        pass
+                
+                if statement_match:
+                    try:
+                        statement_amount = float(statement_match.group(1).replace(',', ''))
+                        amounts["statement_total"] = f"{statement_amount:,.2f}"
+                    except:
+                        pass
+                
+                # Calculate variance if we have both amounts
+                try:
+                    bord_val = float(amounts["bordereaux_total"].replace(',', ''))
+                    stmt_val = float(amounts["statement_total"].replace(',', ''))
+                    variance = abs(bord_val - stmt_val)
+                    variance_pct = (variance / max(stmt_val, 1)) * 100
+                    
+                    amounts["variance"] = f"{variance:,.2f}"
+                    amounts["variance_percent"] = f"{variance_pct:.1f}"
+                except:
+                    pass
+                    
+            except Exception as e:
+                # If JSON parsing fails, try regex patterns on the raw text
+                import re
+                
+                # Look for common amount patterns
+                amount_patterns = [
+                    r'total.*?([0-9,]+\.?\d*)',
+                    r'paid.*?([0-9,]+\.?\d*)', 
+                    r'claims.*?([0-9,]+\.?\d*)',
+                    r'bordereaux.*?([0-9,]+\.?\d*)',
+                    r'statement.*?([0-9,]+\.?\d*)'
+                ]
+                
+                found_amounts = []
+                for pattern in amount_patterns:
+                    matches = re.findall(pattern, response_text.lower())
+                    for match in matches:
+                        try:
+                            amount = float(match.replace(',', ''))
+                            if amount > 0:
+                                found_amounts.append(amount)
+                        except:
+                            pass
+                
+                # If we found amounts, use the largest ones as totals
+                if found_amounts:
+                    found_amounts.sort(reverse=True)
+                    if len(found_amounts) >= 2:
+                        amounts["bordereaux_total"] = f"{found_amounts[0]:,.2f}"
+                        amounts["statement_total"] = f"{found_amounts[1]:,.2f}"
+                        variance = abs(found_amounts[0] - found_amounts[1])
+                        variance_pct = (variance / max(found_amounts[1], 1)) * 100
+                        amounts["variance"] = f"{variance:,.2f}"
+                        amounts["variance_percent"] = f"{variance_pct:.1f}"
+                    elif len(found_amounts) == 1:
+                        amounts["bordereaux_total"] = f"{found_amounts[0]:,.2f}"
+        
+        return amounts
     
     def _extract_date_errors(self, analysis_results: Dict[str, Any]) -> List[str]:
         errors = []

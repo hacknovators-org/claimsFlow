@@ -216,21 +216,32 @@ class ClaimsAnalysisAgent(BaseAgent):
         try:
             response = await self.agent_executor.ainvoke({
                 "input": """
-                Reconcile amounts between different documents:
-                1. Compare bordereaux totals with statement totals
-                2. Check if paid losses match across documents
-                3. Validate outstanding amounts consistency
-                4. Identify any material discrepancies (>5% variance)
-                5. Compare booked amounts with cash call records
+                Reconcile amounts between different documents using the available tools:
                 
-                Provide detailed reconciliation summary with variance analysis.
+                1. First, extract bordereaux claims data using extract_bordereaux_claims tool
+                2. Then, extract statement totals using extract_statement_totals tool  
+                3. Finally, compare the totals using compare_bordereaux_vs_statement tool with underwriting year 2022
+                
+                Focus on:
+                - Total paid amounts from bordereaux vs claims paid in statements
+                - Outstanding amounts consistency
+                - Identify any material discrepancies (>5% variance)
+                - Calculate exact variance amounts and percentages
+                
+                Provide a detailed reconciliation summary with:
+                - Exact bordereaux total paid amount
+                - Exact statement claims paid amount  
+                - Exact variance amount and percentage
+                - Clear assessment of whether amounts reconcile
+                
+                Use the tools in sequence to get accurate financial data for comparison.
                 """
             })
             
             return {
                 "reconciliation_completed": True,
                 "agent_response": response.get("output", ""),
-                "discrepancies_found": "discrepancy" in response.get("output", "").lower(),
+                "discrepancies_found": "discrepancy" in response.get("output", "").lower() or "variance" in response.get("output", "").lower(),
                 "raw_analysis": response
             }
         except Exception as e:
@@ -239,7 +250,7 @@ class ClaimsAnalysisAgent(BaseAgent):
                 "error": str(e),
                 "discrepancies_found": True
             }
-    
+        
     async def _validate_dates(self, claims_data: Dict) -> Dict[str, Any]:
         try:
             response = await self.agent_executor.ainvoke({
