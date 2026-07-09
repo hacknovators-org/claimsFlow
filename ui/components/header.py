@@ -1,25 +1,31 @@
 import streamlit as st
 from datetime import datetime
 
+from ui.components.ui import status_pill
+
+_VIEW_LABEL = {
+    "idle": ("Ready", "neutral"),
+    "running": ("Processing", "info"),
+    "completed": ("Complete", "success"),
+    "failed": ("Failed", "danger"),
+}
+
+
 def render_header():
-    st.title("🏢 Claims Processing Agent")
-    st.markdown("**AI-Powered Reinsurance Claims Analysis & Processing**")
-    
+    st.title("Claims Processing Agent")
+    st.caption("AI-Powered Reinsurance Claims Analysis & Processing")
+
     col1, col2, col3 = st.columns([2, 1, 1])
-    
+
     with col1:
-        st.markdown("📧 **Source Email:** wamitinewton@gmail.com")
-    
+        sender = st.session_state.run.sender_email or "—"
+        st.markdown(f"**Source Email:** {sender}")
+
     with col2:
-        current_time = datetime.now().strftime("%H:%M:%S")
-        st.markdown(f"🕐 **Time:** {current_time}")
-    
+        st.markdown(f"**Time:** {datetime.now().strftime('%H:%M:%S')}")
+
     with col3:
-        if st.session_state.get('processing', False):
-            st.markdown("🔄 **Status:** Processing")
-        elif st.session_state.get('completed', False):
-            st.markdown("✅ **Status:** Complete")
-        else:
-            st.markdown("⭐ **Status:** Ready")
-    
+        label, tone = _VIEW_LABEL[st.session_state.run.view]
+        status_pill(label, tone=tone)
+
     st.markdown("---")

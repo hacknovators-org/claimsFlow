@@ -1,0 +1,16 @@
+# Pinned theme (not adaptive to OS/browser dark mode).
+#
+# Decision (WORKFLOW.md §9): an internal underwriting/claims ops tool is used
+# in a small number of known contexts (desk, ops room) where a single
+# consistent look reduces support burden more than dark-mode polish is worth.
+# Re-open this if a future iteration finds a real need for a dark variant.
+[theme]
+base = "light"
+primaryColor = "#1D4E5F"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6F7"
+textColor = "#1A2226"
+font = "sans serif"
+
+[server]
+headless = false

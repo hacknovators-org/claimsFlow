@@ -1,73 +1,51 @@
 """
-Test script to verify WebSocket connection
-Run this before starting the Streamlit app to ensure server is accessible
+Test script to verify the FastAPI /ws broadcast connection.
+Run this against a live `uvicorn main:app` process (see run.py) while a
+processing run is active to watch AgentUpdate JSON messages arrive.
 """
 import asyncio
-import websockets
 import json
 import logging
+import os
+
+import websockets
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def test_connection():
-    """Test WebSocket connection"""
-    uri = "ws://localhost:8785"
-    
+    host = os.getenv("HOST", "localhost").replace("0.0.0.0", "localhost")
+    port = os.getenv("PORT", 8000)
+    uri = f"ws://{host}:{port}/ws"
+
     try:
         logger.info(f"Testing connection to {uri}...")
-        
+
         async with websockets.connect(uri, ping_interval=20, ping_timeout=20) as websocket:
-            logger.info("✅ Successfully connected to WebSocket server!")
-            
-            # Wait for welcome message
-            welcome = await websocket.recv()
-            welcome_data = json.loads(welcome)
-            logger.info(f"Received welcome: {welcome_data.get('message')}")
-            logger.info(f"Available commands: {welcome_data.get('available_commands')}")
-            
-            # Test ping
-            logger.info("\nTesting ping...")
-            await websocket.send(json.dumps({"type": "ping"}))
-            pong = await websocket.recv()
-            pong_data = json.loads(pong)
-            logger.info(f"✅ Received pong: {pong_data.get('type')}")
-            
-            # Test get_active_agents
-            logger.info("\nTesting get_active_agents...")
-            await websocket.send(json.dumps({"type": "get_active_agents"}))
-            response = await websocket.recv()
-            response_data = json.loads(response)
-            logger.info(f"✅ Received: {response_data.get('type')}")
-            
-            logger.info("\n✅ All tests passed! WebSocket server is working correctly.")
-            return True
-            
+            logger.info("Successfully connected to /ws")
+            logger.info("Listening for AgentUpdate broadcasts (Ctrl+C to stop)...")
+
+            while True:
+                message = await websocket.recv()
+                update = json.loads(message)
+                logger.info(
+                    f"[{update.get('agent_id')}] {update.get('stage')} "
+                    f"({update.get('progress')}%) - {update.get('message')}"
+                )
+
     except ConnectionRefusedError:
-        logger.error("❌ Connection refused. Is the WebSocket server running?")
-        logger.error("   Start the server with: python websocket_server.py")
+        logger.error("Connection refused. Is `uvicorn main:app` (run.py) running?")
         return False
-        
-    except asyncio.TimeoutError:
-        logger.error("❌ Connection timeout. Server is not responding.")
-        return False
-        
+    except KeyboardInterrupt:
+        return True
     except Exception as e:
-        logger.error(f"❌ Test failed: {e}")
+        logger.error(f"Test failed: {e}")
         return False
 
+
 if __name__ == "__main__":
-    print("=" * 60)
-    print("WebSocket Connection Test")
-    print("=" * 60)
-    
-    success = asyncio.run(test_connection())
-    
-    print("=" * 60)
-    if success:
-        print("✅ Test completed successfully!")
-        print("You can now start the Streamlit app.")
-    else:
-        print("❌ Test failed!")
-        print("Please ensure the WebSocket server is running on port 8785.")
-    print("=" * 60)
+    asyncio.run(test_connection())
