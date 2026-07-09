@@ -22,13 +22,13 @@ from models.document_upload import DocumentUpload
 
 class DocumentProcessingPipeline:
     
-    def __init__(self, db: Session, api_key: str = None):
+    def __init__(self, db: Session):
         self.db = db
         self.extractor = DocumentExtractor()
-        self.claim_parser = ClaimParser(api_key)
-        self.premium_parser = PremiumParser(api_key)
-        self.statement_parser = StatementParser(api_key)
-        self.treaty_parser = TreatyParser(api_key)
+        self.claim_parser = ClaimParser()
+        self.premium_parser = PremiumParser()
+        self.statement_parser = StatementParser()
+        self.treaty_parser = TreatyParser()
     
     def process_files(self, file_paths: List[str], batch_id: int) -> Dict[str, Any]:
         results = {

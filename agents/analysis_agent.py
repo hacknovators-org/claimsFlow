@@ -2,9 +2,8 @@ import os
 from typing import Dict, Any, List
 from langchain.agents import create_react_agent, AgentExecutor, initialize_agent, AgentType
 from langchain.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
 from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
+from services.azure_openai_config import get_azure_chat_llm, get_azure_embeddings
 from sqlalchemy import create_engine
 from .base_agent import BaseAgent, AgentStatus
 from services.agent_tools import (
@@ -80,19 +79,15 @@ class ClaimsAnalysisAgent(BaseAgent):
             raise
     
     async def _initialize_agent(self, vector_store_path: str):
-        openai_api_key = os.getenv("OPENAI_API_KEY")
         database_url = os.getenv("DATABASE_URL")
-        
-        if not openai_api_key:
-            raise Exception("OPENAI_API_KEY not found in environment")
-        
-        self.llm = ChatOpenAI(model="gpt-4o", api_key=openai_api_key, temperature=0)
-        
-        embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+
+        self.llm = get_azure_chat_llm(temperature=0)
+
+        embeddings = get_azure_embeddings()
         self.vector_store = FAISS.load_local(vector_store_path, embeddings, allow_dangerous_deserialization=True)
-        
+
         if database_url:
-            initialize_tools(self.vector_store, database_url, openai_api_key)
+            initialize_tools(self.vector_store, database_url)
         
         self.tools = [
             query_documents,

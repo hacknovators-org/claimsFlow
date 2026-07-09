@@ -1,9 +1,8 @@
 from typing import List
-from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import Document
 from pydantic import BaseModel, Field
-import os
+from services.azure_openai_config import get_azure_chat_llm
 
 class AccountStatementSchema(BaseModel):
     account_period: str = Field(description="Accounting period (e.g., Q1 2024)")
@@ -27,11 +26,8 @@ class ReinsurerShareSchema(BaseModel):
 
 class StatementParser:
     
-    def __init__(self, api_key: str = None):
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=api_key or os.getenv("OPENAI_API_KEY")
-        )
+    def __init__(self):
+        self.llm = get_azure_chat_llm()
     
     def parse_account_statement(self, documents: List[Document]) -> List[AccountStatementSchema]:
         parser = PydanticOutputParser(pydantic_object=AccountStatementSchema)

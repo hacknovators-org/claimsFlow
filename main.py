@@ -2,9 +2,12 @@ import asyncio
 import logging
 import os
 from dotenv import load_dotenv
+from fastapi import FastAPI
 from websocket_server import start_websocket_server
 from pipeline_controller import ClaimsProcessingPipeline
 from websocket_manager import websocket_manager
+from routes.sms import router as sms_router
+from services.scheduler_service import start_scheduler
 
 load_dotenv()
 
@@ -15,10 +18,19 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+app = FastAPI(title="Claims Flow SMS Gateway")
+app.include_router(sms_router)
+
+
+@app.on_event("startup")
+async def _on_startup():
+    start_scheduler()
+
 def validate_environment():
     required_vars = [
-        "OPENAI_API_KEY",
-        "EMAIL_HOST", 
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_ENDPOINT",
+        "EMAIL_HOST",
         "EMAIL_APP_PASSWORD"
     ]
     

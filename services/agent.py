@@ -1,4 +1,3 @@
-import os
 import pickle
 from pathlib import Path
 from typing import List, Optional
@@ -12,30 +11,21 @@ from langchain.document_loaders import (
     UnstructuredPDFLoader
 )
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.schema import Document
-import openai
+from services.azure_openai_config import get_azure_embeddings
 
 class DocumentEmbeddingSystem:
-    def __init__(self, openai_api_key: str = None, downloads_folder: str = "downloads"):
-        if not openai_api_key:
-            openai_api_key = os.getenv('OPENAI_API_KEY')
-        
-        if not openai_api_key:
-            raise ValueError("OpenAI API key not provided and not found in environment variables")
-        
+    def __init__(self, downloads_folder: str = "downloads"):
         self.downloads_folder = Path(downloads_folder)
-        self.embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+        self.embeddings = get_azure_embeddings()
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
             length_function=len,
         )
         self.vector_store = None
-        
-        openai.api_key = openai_api_key
-        
+
         self.supported_extensions = {'.pdf', '.docx', '.doc', '.xlsx', '.xls'}
     
     def load_document(self, file_path: Path) -> List[Document]:

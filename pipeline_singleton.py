@@ -1,0 +1,4 @@
+from pipeline_controller import ClaimsProcessingPipeline
+from websocket_manager import websocket_manager
+
+pipeline = ClaimsProcessingPipeline(websocket_manager)

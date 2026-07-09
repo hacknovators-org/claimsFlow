@@ -88,15 +88,14 @@ class DocumentAgent(BaseAgent):
     async def _initialize_services(self):
         email_host = os.getenv("EMAIL_HOST")
         email_password = os.getenv("EMAIL_APP_PASSWORD")
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        
-        if not all([email_host, email_password, openai_api_key]):
+
+        if not all([email_host, email_password]):
             raise Exception("Missing required environment variables")
-        
+
         self.gmail_connector = FocusedGmailConnector(email_host, email_password)
-        self.email_analyzer = SimpleEmailAnalyzer(openai_api_key)
-        self.embedding_system = DocumentEmbeddingSystem(openai_api_key, self.download_folder)
-        
+        self.email_analyzer = SimpleEmailAnalyzer()
+        self.embedding_system = DocumentEmbeddingSystem(self.download_folder)
+
         os.makedirs(self.download_folder, exist_ok=True)
     
     async def _fetch_latest_email(self, sender_email: str):

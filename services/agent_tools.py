@@ -1,8 +1,7 @@
 from langchain.tools import tool
 from langchain.agents import create_sql_agent
 from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.llms import OpenAI
+from services.azure_openai_config import get_azure_embeddings
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
 from models.cash_call import CashCall
@@ -17,11 +16,11 @@ vector_store: FAISS = None
 db_engine = None
 embeddings = None
 
-def initialize_tools(vector_store_instance: FAISS, database_url: str, openai_api_key: str):
+def initialize_tools(vector_store_instance: FAISS, database_url: str):
     global vector_store, db_engine, embeddings
     vector_store = vector_store_instance
     db_engine = create_engine(database_url)
-    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+    embeddings = get_azure_embeddings()
 
 def extract_amounts_from_text(text: str) -> Dict[str, float]:
     """Extract monetary amounts from text"""
