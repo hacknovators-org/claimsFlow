@@ -12,6 +12,7 @@ class ClaimsProcessingPipeline:
         self.websocket_manager = websocket_manager
         self.active_agents: Dict[str, MasterClaimsAgent] = {}
         self.processing_history = []
+        self.results_by_agent: Dict[str, Dict[str, Any]] = {}
         self.logger = logging.getLogger(__name__)
     
     async def start_processing(self, sender_email: str = "Maundu@kenyare.co.ke") -> Dict[str, Any]:
@@ -46,10 +47,11 @@ class ClaimsProcessingPipeline:
             }
             
             self.processing_history.append(processing_record)
-            
+            self.results_by_agent[agent_id] = results
+
             if agent_id in self.active_agents:
                 del self.active_agents[agent_id]
-            
+
             self.logger.info(f"Claims processing completed successfully: {agent_id}")
             
             return {
@@ -105,6 +107,9 @@ class ClaimsProcessingPipeline:
     
     def get_processing_history(self, limit: int = 50) -> List[Dict[str, Any]]:
         return self.processing_history[-limit:]
+
+    def get_result(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        return self.results_by_agent.get(agent_id)
     
     def get_pipeline_stats(self) -> Dict[str, Any]:
         total_processed = len(self.processing_history)
