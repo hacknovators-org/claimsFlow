@@ -8,7 +8,6 @@ __pycache__/
 venv/
 my_faiss_index/
 claims_vector_store
-downloads
 .env
 
 # VSCode settings
