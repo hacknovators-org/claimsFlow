@@ -15,3 +15,7 @@ claims_vector_store
 
 # Logs
 *.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

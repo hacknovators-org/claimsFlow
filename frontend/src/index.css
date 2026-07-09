@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-canvas text-ink antialiased font-sans;
+  margin: 0;
+  font-feature-settings: "cv11", "ss01";
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+::selection {
+  @apply bg-brand/20;
+}
+
+* {
+  scrollbar-color: theme("colors.neutral.border") transparent;
+}
+
+:focus-visible {
+  outline: 2px solid theme("colors.brand.DEFAULT");
+  outline-offset: 2px;
+}
