@@ -1,9 +1,10 @@
 import logging
 import os
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-
+from fastapi.staticfiles import StaticFiles
+# from websocket_server import start_websocket_server
+from pipeline_controller import ClaimsProcessingPipeline
 from websocket_manager import websocket_manager
 from routes.sms import router as sms_router
 from routes.processing import router as processing_router
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Claims Flow SMS Gateway")
 app.include_router(sms_router)
 app.include_router(processing_router)
+
+# Ensure reports directory exists
+os.makedirs("reports", exist_ok=True)
+app.mount("/reports", StaticFiles(directory="reports"), name="reports")
 
 
 @app.on_event("startup")

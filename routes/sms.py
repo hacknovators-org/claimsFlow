@@ -59,6 +59,17 @@ async def _process_and_notify(phone_number: str):
     result = await pipeline.start_processing(DEFAULT_SENDER_EMAIL)
     if result["success"]:
         recommendation = result["results"].get("overall_recommendation", "N/A")
-        send_sms(phone_number, f"Claims processing complete. Recommendation: {recommendation}")
+        report_path = result.get("processing_record", {}).get("report_path")
+        
+        # Build the public URL for the report
+        base_url = os.getenv("BASE_URL", "http://localhost:8000")
+        if report_path:
+            filename = os.path.basename(report_path)
+            report_url = f"{base_url}/reports/{filename}"
+            msg = f"Claims processing complete. Recommendation: {recommendation}. Report: {report_url}"
+        else:
+            msg = f"Claims processing complete. Recommendation: {recommendation}"
+            
+        send_sms(phone_number, msg)
     else:
         send_sms(phone_number, f"Claims processing failed: {result.get('error', 'unknown error')}")

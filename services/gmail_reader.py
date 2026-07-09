@@ -146,10 +146,19 @@ class FocusedGmailConnector:
         return filenames
     
     def read_latest_email_from_sender(self, sender_email: str) -> Optional[EmailContent]:
-        uids = self.get_emails_from_sender(sender_email, limit=1)
+        uids = self.get_emails_from_sender(sender_email, limit=10)
         if not uids:
             logging.info(f"No emails found from {sender_email}")
             return None
+            
+        # Iterate backwards to find the most recent email that has attachments
+        for uid in reversed(uids):
+            content = self.extract_email_content(uid)
+            if content and content.attachment_filenames:
+                logging.info(f"Found email with {len(content.attachment_filenames)} attachments.")
+                return content
+                
+        logging.info("No recent emails had attachments, falling back to the very latest.")
         return self.extract_email_content(uids[-1])
     
     def read_unread_emails_from_sender(self, sender_email: str, limit: int = 5) -> List[EmailContent]:
