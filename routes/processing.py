@@ -3,6 +3,7 @@ import logging
 import os
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from pipeline_singleton import pipeline
 
@@ -46,3 +47,14 @@ async def get_result(agent_id: str):
 async def stop_agent(agent_id: str):
     stopped = await pipeline.stop_agent(agent_id)
     return {"stopped": stopped}
+
+
+@router.get("/result/{agent_id}/report.pdf")
+async def get_report_pdf(agent_id: str):
+    result = pipeline.get_result(agent_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No result for this agent_id yet")
+    pdf_path = result.get("report_generated", {}).get("pdf_path")
+    if not pdf_path or not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="No PDF report generated for this run")
+    return FileResponse(pdf_path, media_type="application/pdf", filename=os.path.basename(pdf_path))
