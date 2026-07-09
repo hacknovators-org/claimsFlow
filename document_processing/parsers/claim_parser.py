@@ -1,10 +1,9 @@
 from typing import List, Type, Dict, Any
-from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import Document
 from pydantic import BaseModel, Field
 from datetime import datetime
-import os
+from services.azure_openai_config import get_azure_chat_llm
 
 class ClaimNotificationSchema(BaseModel):
     claim_number: str = Field(description="Unique claim identification number")
@@ -36,11 +35,8 @@ class ClaimBordereauxSchema(BaseModel):
 
 class ClaimParser:
     
-    def __init__(self, api_key: str = None):
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=api_key or os.getenv("OPENAI_API_KEY")
-        )
+    def __init__(self):
+        self.llm = get_azure_chat_llm()
     
     def parse_claim_notification(self, documents: List[Document]) -> List[ClaimNotificationSchema]:
         parser = PydanticOutputParser(pydantic_object=ClaimNotificationSchema)

@@ -1,9 +1,8 @@
 from typing import List
-from langchain_openai import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import Document
 from pydantic import BaseModel, Field
-import os
+from services.azure_openai_config import get_azure_chat_llm
 
 class PremiumBordereauxSchema(BaseModel):
     policy_number: str = Field(description="Policy number")
@@ -18,11 +17,8 @@ class PremiumBordereauxSchema(BaseModel):
 
 class PremiumParser:
     
-    def __init__(self, api_key: str = None):
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=api_key or os.getenv("OPENAI_API_KEY")
-        )
+    def __init__(self):
+        self.llm = get_azure_chat_llm()
     
     def parse_premium_bordereaux(self, documents: List[Document]) -> List[PremiumBordereauxSchema]:
         parser = PydanticOutputParser(pydantic_object=PremiumBordereauxSchema)

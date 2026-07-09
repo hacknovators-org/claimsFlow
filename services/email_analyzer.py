@@ -3,8 +3,7 @@ import logging
 from typing import List, Dict
 from dataclasses import dataclass
 from enum import Enum
-from openai import OpenAI
-import os
+from services.azure_openai_config import get_azure_openai_client, AZURE_OPENAI_CHAT_DEPLOYMENT
 
 class DocumentType(Enum):
     CLAIMS_NOTIFICATION = "Claims Notification Document"
@@ -38,14 +37,8 @@ class AnalysisReport:
 
 class SimpleEmailAnalyzer:
     
-    def __init__(self, api_key: str = None):
-        if not api_key:
-            api_key = os.getenv("OPENAI_API_KEY")
-        
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not provided and not found in environment variables")
-            
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self):
+        self.client = get_azure_openai_client()
 
     def create_analysis_prompt(self, email_subject: str, email_body: str, attachments: List[str]) -> str:
         prompt = f"""
@@ -107,7 +100,7 @@ Mark as "Complete" if all 3 mandatory document types are identified, even if in 
     def call_openai_api(self, prompt: str) -> Dict:
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=AZURE_OPENAI_CHAT_DEPLOYMENT,
                 messages=[
                     {"role": "system", "content": "You are an expert insurance document analyst. Recognize that single files can contain multiple document types. Always respond with valid JSON in the exact format requested."},
                     {"role": "user", "content": prompt}

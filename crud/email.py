@@ -7,10 +7,6 @@ import os
 load_dotenv('../.env')
 
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable not set")
-
 EMAIL_HOST = os.getenv("EMAIL_HOST")
 if not EMAIL_HOST:
     raise ValueError("EMAIL_HOST environment variable not set")
@@ -25,14 +21,14 @@ from dataclasses import asdict
 async def analyze_emails_from_sender(sender_email: str) -> List[EmailAnalysisResponse]:
     """
     Fetch latest and unread emails from a specific sender,
-    analyze with OpenAI, and return structured results.
+    analyze with Azure OpenAI, and return structured results.
     """
     results: List[EmailAnalysisResponse] = []
 
     gmail = FocusedGmailConnector(EMAIL_HOST, EMAIL_APP_PASSWORD)
 
     with gmail:
-        analyzer = SimpleEmailAnalyzer(api_key=OPENAI_API_KEY)
+        analyzer = SimpleEmailAnalyzer()
 
         # Latest email
         latest_email = gmail.read_latest_email_from_sender(sender_email)

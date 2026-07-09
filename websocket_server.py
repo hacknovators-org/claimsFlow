@@ -5,12 +5,10 @@ from typing import Dict, Any
 import websockets
 from websockets.server import WebSocketServerProtocol
 from websocket_manager import websocket_manager
-from pipeline_controller import ClaimsProcessingPipeline
+from pipeline_singleton import pipeline
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-pipeline = ClaimsProcessingPipeline(websocket_manager)
 
 async def handle_client_message(websocket: WebSocketServerProtocol, message: Dict[str, Any]):
     try:

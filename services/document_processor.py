@@ -9,9 +9,9 @@ import os
 
 class DocumentProcessingService:
     
-    def __init__(self, db: Session, api_key: str = None):
+    def __init__(self, db: Session):
         self.db = db
-        self.pipeline = DocumentProcessingPipeline(db, api_key)
+        self.pipeline = DocumentProcessingPipeline(db)
     
     def process_email_attachments(
         self, 

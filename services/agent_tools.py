@@ -1,14 +1,14 @@
 from langchain.tools import tool
 from langchain.agents import create_sql_agent
 from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.llms import OpenAI
+from services.azure_openai_config import get_azure_embeddings
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
 from models.cash_call import CashCall
 from typing import List, Dict, Any, Optional
 import json
 import os
+import re
 from datetime import datetime, date
 import pandas as pd
 
@@ -16,11 +16,41 @@ vector_store: FAISS = None
 db_engine = None
 embeddings = None
 
-def initialize_tools(vector_store_instance: FAISS, database_url: str, openai_api_key: str):
+def initialize_tools(vector_store_instance: FAISS, database_url: str):
     global vector_store, db_engine, embeddings
     vector_store = vector_store_instance
     db_engine = create_engine(database_url)
-    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+    embeddings = get_azure_embeddings()
+
+def extract_amounts_from_text(text: str) -> Dict[str, float]:
+    """Extract monetary amounts from text"""
+    amounts = {}
+    
+    # Look for common patterns in marine insurance documents
+    patterns = {
+        'total_income': r'(?:total income|total premium)\s*[:\-]?\s*([0-9,]+\.?\d*)',
+        'claims_paid': r'(?:claims paid|paid amount|settlement)\s*[:\-]?\s*([0-9,]+\.?\d*)',
+        'outstanding': r'(?:outstanding|balance)\s*[:\-]?\s*([0-9,]+\.?\d*)',
+        'commission': r'(?:commission)\s*[:\-]?\s*([0-9,]+\.?\d*)',
+        'balance': r'(?:balance|net balance)\s*[:\-]?\s*([0-9,]+\.?\d*)',
+        'total_outgo': r'(?:total outgo|outgo)\s*[:\-]?\s*([0-9,]+\.?\d*)'
+    }
+    
+    text_lower = text.lower()
+    
+    for key, pattern in patterns.items():
+        matches = re.findall(pattern, text_lower, re.IGNORECASE)
+        if matches:
+            # Take the first match and clean it
+            amount_str = matches[0].replace(',', '')
+            try:
+                amounts[key] = float(amount_str)
+            except ValueError:
+                amounts[key] = 0.0
+        else:
+            amounts[key] = 0.0
+    
+    return amounts
 
 @tool
 def query_documents(query: str, k: int = 5) -> str:
@@ -48,7 +78,7 @@ def query_documents(query: str, k: int = 5) -> str:
 
 @tool
 def extract_bordereaux_claims() -> str:
-    """Extract claims data from bordereaux documents with page-specific targeting"""
+    """Extract claims data from bordereaux documents with actual amounts"""
     if not vector_store:
         return "Vector store not initialized"
     
@@ -60,6 +90,8 @@ def extract_bordereaux_claims() -> str:
     ]
     
     claims_data = []
+    total_paid = 0.0
+    total_outstanding = 0.0
     
     for query in bordereaux_queries:
         results = vector_store.similarity_search(query, k=3)
@@ -69,32 +101,55 @@ def extract_bordereaux_claims() -> str:
             filename = doc.metadata.get("filename", "").lower()
             
             if doc_type == "claims_bordereaux" or "bordereaux" in filename or "bordereaux" in doc.page_content.lower():
+                # Extract amounts from the content
+                amounts = extract_amounts_from_text(doc.page_content)
+                
+                # Look for specific claim amounts in the content
+                paid_matches = re.findall(r'([0-9,]+\.?\d*)\s*(?:paid|settlement)', doc.page_content.lower())
+                outstanding_matches = re.findall(r'([0-9,]+\.?\d*)\s*(?:outstanding|balance)', doc.page_content.lower())
+                
+                page_paid = 0.0
+                page_outstanding = 0.0
+                
+                for match in paid_matches:
+                    try:
+                        page_paid += float(match.replace(',', ''))
+                    except ValueError:
+                        pass
+                
+                for match in outstanding_matches:
+                    try:
+                        page_outstanding += float(match.replace(',', ''))
+                    except ValueError:
+                        pass
+                
+                total_paid += page_paid
+                total_outstanding += page_outstanding
+                
                 claims_data.append({
                     "source": doc.metadata.get("filename", "Unknown"),
                     "page_number": doc.metadata.get("page_number", "N/A"),
                     "document_type": doc_type,
                     "content": doc.page_content[:800],
+                    "extracted_amounts": amounts,
+                    "page_paid": page_paid,
+                    "page_outstanding": page_outstanding,
                     "extraction_method": "bordereaux_specific"
                 })
     
-    if not claims_data:
-        generic_results = vector_store.similarity_search("claims data amounts table", k=5)
-        for doc in generic_results:
-            content_lower = doc.page_content.lower()
-            if any(term in content_lower for term in ["claim", "paid", "outstanding", "amount"]):
-                claims_data.append({
-                    "source": doc.metadata.get("filename", "Unknown"),
-                    "page_number": doc.metadata.get("page_number", "N/A"),
-                    "document_type": doc.metadata.get("document_type", "unknown"),
-                    "content": doc.page_content[:800],
-                    "extraction_method": "generic_search"
-                })
-    
-    return json.dumps(claims_data, indent=2)
+    return json.dumps({
+        "claims_data": claims_data,
+        "totals": {
+            "total_paid": total_paid,
+            "total_outstanding": total_outstanding,
+            "total_exposure": total_paid + total_outstanding
+        },
+        "summary": f"Found {len(claims_data)} bordereaux pages with total paid: {total_paid:,.2f} and outstanding: {total_outstanding:,.2f}"
+    }, indent=2)
 
 @tool
 def extract_statement_totals() -> str:
-    """Extract total amounts from cedant statements with page-specific targeting"""
+    """Extract total amounts from cedant statements with actual amounts"""
     if not vector_store:
         return "Vector store not initialized"
     
@@ -106,6 +161,14 @@ def extract_statement_totals() -> str:
     ]
     
     statement_data = []
+    aggregated_amounts = {
+        'total_income': 0.0,
+        'claims_paid': 0.0,
+        'outstanding': 0.0,
+        'commission': 0.0,
+        'balance': 0.0,
+        'total_outgo': 0.0
+    }
     
     for query in statement_queries:
         results = vector_store.similarity_search(query, k=3)
@@ -115,28 +178,27 @@ def extract_statement_totals() -> str:
             filename = doc.metadata.get("filename", "").lower()
             
             if doc_type == "cedant_statement" or "statement" in filename or "account" in doc.page_content.lower():
+                amounts = extract_amounts_from_text(doc.page_content)
+                
+                # Aggregate amounts (take highest values to avoid duplicates)
+                for key, value in amounts.items():
+                    if value > aggregated_amounts.get(key, 0):
+                        aggregated_amounts[key] = value
+                
                 statement_data.append({
                     "source": doc.metadata.get("filename", "Unknown"),
                     "page_number": doc.metadata.get("page_number", "N/A"),
                     "document_type": doc_type,
                     "content": doc.page_content[:800],
+                    "extracted_amounts": amounts,
                     "extraction_method": "statement_specific"
                 })
     
-    if not statement_data:
-        generic_results = vector_store.similarity_search("total balance premium commission", k=5)
-        for doc in generic_results:
-            content_lower = doc.page_content.lower()
-            if any(term in content_lower for term in ["total", "balance", "commission", "premium"]):
-                statement_data.append({
-                    "source": doc.metadata.get("filename", "Unknown"),
-                    "page_number": doc.metadata.get("page_number", "N/A"),
-                    "document_type": doc.metadata.get("document_type", "unknown"),
-                    "content": doc.page_content[:800],
-                    "extraction_method": "generic_search"
-                })
-    
-    return json.dumps(statement_data, indent=2)
+    return json.dumps({
+        "statement_data": statement_data,
+        "aggregated_totals": aggregated_amounts,
+        "summary": f"Found {len(statement_data)} statement pages with total income: {aggregated_amounts['total_income']:,.2f}, claims paid: {aggregated_amounts['claims_paid']:,.2f}"
+    }, indent=2)
 
 @tool
 def extract_treaty_exclusions(treaty_name: str = "") -> str:
@@ -237,20 +299,41 @@ def validate_claim_against_exclusions(claim_description: str, cause_of_loss: str
     }, indent=2)
 
 @tool
-def compare_bordereaux_vs_statement(underwriting_year: int) -> str:
-    """Compare bordereaux totals against statement totals for specific year"""
+def compare_bordereaux_vs_statement(underwriting_year: int = 2022) -> str:
+    """Compare bordereaux totals against statement totals with actual amounts"""
     bordereaux_data = json.loads(extract_bordereaux_claims())
     statement_data = json.loads(extract_statement_totals())
     
+    # Extract totals
+    bordereaux_totals = bordereaux_data.get("totals", {})
+    statement_totals = statement_data.get("aggregated_totals", {})
+    
+    bordereaux_paid = bordereaux_totals.get("total_paid", 0.0)
+    statement_claims_paid = statement_totals.get("claims_paid", 0.0)
+    
+    # Calculate variance
+    variance = abs(bordereaux_paid - statement_claims_paid)
+    variance_percent = (variance / max(statement_claims_paid, 1)) * 100
+    
+    # Determine if significant discrepancy
+    significant_discrepancy = variance_percent > 5.0  # More than 5% variance
+    
     comparison = {
         "underwriting_year": underwriting_year,
-        "bordereaux_sources": [item["source"] for item in bordereaux_data],
-        "statement_sources": [item["source"] for item in statement_data],
-        "data_available": len(bordereaux_data) > 0 and len(statement_data) > 0,
-        "bordereaux_pages_found": len(bordereaux_data),
-        "statement_pages_found": len(statement_data),
-        "requires_manual_verification": len(bordereaux_data) == 0 or len(statement_data) == 0,
-        "recommendation": "Data found for comparison" if len(bordereaux_data) > 0 and len(statement_data) > 0 else "Manual review required for amount reconciliation"
+        "bordereaux_sources": [item["source"] for item in bordereaux_data.get("claims_data", [])],
+        "statement_sources": [item["source"] for item in statement_data.get("statement_data", [])],
+        "amounts": {
+            "bordereaux_total_paid": bordereaux_paid,
+            "statement_claims_paid": statement_claims_paid,
+            "variance": variance,
+            "variance_percent": variance_percent
+        },
+        "data_available": len(bordereaux_data.get("claims_data", [])) > 0 and len(statement_data.get("statement_data", [])) > 0,
+        "significant_discrepancy": significant_discrepancy,
+        "bordereaux_pages_found": len(bordereaux_data.get("claims_data", [])),
+        "statement_pages_found": len(statement_data.get("statement_data", [])),
+        "reconciliation_status": "FAILED" if significant_discrepancy else "PASSED",
+        "recommendation": f"Manual review required - {variance_percent:.1f}% variance" if significant_discrepancy else f"Amounts reconciled - {variance_percent:.1f}% variance"
     }
     
     return json.dumps(comparison, indent=2)

@@ -2,9 +2,8 @@ import os
 from typing import Dict, Any, List
 from langchain.agents import create_react_agent, AgentExecutor, initialize_agent, AgentType
 from langchain.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
 from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
+from services.azure_openai_config import get_azure_chat_llm, get_azure_embeddings
 from sqlalchemy import create_engine
 from .base_agent import BaseAgent, AgentStatus
 from services.agent_tools import (
@@ -80,19 +79,15 @@ class ClaimsAnalysisAgent(BaseAgent):
             raise
     
     async def _initialize_agent(self, vector_store_path: str):
-        openai_api_key = os.getenv("OPENAI_API_KEY")
         database_url = os.getenv("DATABASE_URL")
-        
-        if not openai_api_key:
-            raise Exception("OPENAI_API_KEY not found in environment")
-        
-        self.llm = ChatOpenAI(model="gpt-4o", api_key=openai_api_key, temperature=0)
-        
-        embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+
+        self.llm = get_azure_chat_llm(temperature=0)
+
+        embeddings = get_azure_embeddings()
         self.vector_store = FAISS.load_local(vector_store_path, embeddings, allow_dangerous_deserialization=True)
-        
+
         if database_url:
-            initialize_tools(self.vector_store, database_url, openai_api_key)
+            initialize_tools(self.vector_store, database_url)
         
         self.tools = [
             query_documents,
@@ -216,21 +211,32 @@ class ClaimsAnalysisAgent(BaseAgent):
         try:
             response = await self.agent_executor.ainvoke({
                 "input": """
-                Reconcile amounts between different documents:
-                1. Compare bordereaux totals with statement totals
-                2. Check if paid losses match across documents
-                3. Validate outstanding amounts consistency
-                4. Identify any material discrepancies (>5% variance)
-                5. Compare booked amounts with cash call records
+                Reconcile amounts between different documents using the available tools:
                 
-                Provide detailed reconciliation summary with variance analysis.
+                1. First, extract bordereaux claims data using extract_bordereaux_claims tool
+                2. Then, extract statement totals using extract_statement_totals tool  
+                3. Finally, compare the totals using compare_bordereaux_vs_statement tool with underwriting year 2022
+                
+                Focus on:
+                - Total paid amounts from bordereaux vs claims paid in statements
+                - Outstanding amounts consistency
+                - Identify any material discrepancies (>5% variance)
+                - Calculate exact variance amounts and percentages
+                
+                Provide a detailed reconciliation summary with:
+                - Exact bordereaux total paid amount
+                - Exact statement claims paid amount  
+                - Exact variance amount and percentage
+                - Clear assessment of whether amounts reconcile
+                
+                Use the tools in sequence to get accurate financial data for comparison.
                 """
             })
             
             return {
                 "reconciliation_completed": True,
                 "agent_response": response.get("output", ""),
-                "discrepancies_found": "discrepancy" in response.get("output", "").lower(),
+                "discrepancies_found": "discrepancy" in response.get("output", "").lower() or "variance" in response.get("output", "").lower(),
                 "raw_analysis": response
             }
         except Exception as e:
@@ -239,7 +245,7 @@ class ClaimsAnalysisAgent(BaseAgent):
                 "error": str(e),
                 "discrepancies_found": True
             }
-    
+        
     async def _validate_dates(self, claims_data: Dict) -> Dict[str, Any]:
         try:
             response = await self.agent_executor.ainvoke({
